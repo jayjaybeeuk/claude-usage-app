@@ -9,10 +9,9 @@ let usageChart = null;
 let lastRefreshTime = null;
 let statusInterval = null;
 const UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes
-const WIDGET_HEIGHT_COLLAPSED = 140;
+const WIDGET_HEIGHT_COLLAPSED = 164; // 140 base + 24 status bar
 const WIDGET_ROW_HEIGHT = 30;
 const GRAPH_HEIGHT = 170; // graph section height including padding
-const STATUS_BAR_HEIGHT = 24; // status bar height
 const SONNET_ROW_HEIGHT = 30; // sonnet row height
 
 // Debug logging — only shows in DevTools (development mode).
@@ -439,9 +438,6 @@ function resizeWidget() {
     if (sonnetVisible) {
         height += SONNET_ROW_HEIGHT;
     }
-
-    // Add status bar
-    height += STATUS_BAR_HEIGHT;
 
     // Add graph if visible
     if (isGraphVisible) {

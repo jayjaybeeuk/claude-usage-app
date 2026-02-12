@@ -21,7 +21,7 @@ let mainWindow = null;
 let tray = null;
 
 const WIDGET_WIDTH = 480;
-const WIDGET_HEIGHT = 140;
+const WIDGET_HEIGHT = 164; // 140 base + 24 status bar
 
 // Platform-specific User-Agent
 const USER_AGENT = isMac
