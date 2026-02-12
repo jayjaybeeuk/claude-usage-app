@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, session, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, session, shell, nativeImage, net } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 const { fetchViaWindow } = require('./src/fetch-via-window');
@@ -165,14 +165,26 @@ function createLoginWindow() {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
           });
+          const sessionKey = sessionKeyCookie[0]?.value;
+          console.log('Session key found, attempting to get org ID...');
 
-          if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-            orgId = response.data[0].uuid || response.data[0].id;
-            console.log('Org ID fetched from API:', orgId);
+          // Fetch org ID from API
+          let orgId = null;
+          try {
+            await logClaudeCookieNames('Login');
+            orgId = await fetchOrgIdViaWindow(loginWindow, 'Login');
+            if (!orgId) {
+              const orgs = await claudeGetJson('https://claude.ai/api/organizations');
+              if (orgs && Array.isArray(orgs) && orgs.length > 0) {
+                orgId = orgs[0].uuid || orgs[0].id;
+              }
+            }
+            if (orgId) {
+              console.log('Org ID fetched from API:', orgId);
+            }
+          } catch (err) {
+            console.log('API not ready yet:', err.message);
           }
-        } catch (err) {
-          console.log('API not ready yet:', err.message);
-        }
 
         if (sessionKey && orgId) {
           hasLoggedIn = true;
@@ -268,13 +280,13 @@ async function attemptSilentLogin() {
       if (hasLoggedIn || !silentLoginWindow) return;
 
       try {
-        const cookies = await session.defaultSession.cookies.get({
-          url: 'https://claude.ai',
-          name: 'sessionKey'
-        });
-
-        if (cookies.length > 0) {
-          const sessionKey = cookies[0].value;
+        const cookieHeader = await getClaudeCookieHeader();
+        if (cookieHeader) {
+          const sessionKeyCookie = await session.defaultSession.cookies.get({
+            url: 'https://claude.ai',
+            name: 'sessionKey'
+          });
+          const sessionKey = sessionKeyCookie[0]?.value;
           console.log('[Main] Silent login: Session key found, attempting to get org ID...');
 
           // Fetch org ID from API
@@ -285,10 +297,8 @@ async function attemptSilentLogin() {
                 'Cookie': `sessionKey=${sessionKey}`,
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
               }
-            });
-
-            if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-              orgId = response.data[0].uuid || response.data[0].id;
+            }
+            if (orgId) {
               console.log('[Main] Silent login: Org ID fetched from API:', orgId);
             }
           } catch (err) {
