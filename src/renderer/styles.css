@@ -810,3 +810,60 @@ body.platform-darwin .title-bar {
 .timer-progress.danger {
     stroke: #ef4444;
 }
+
+/* Status Bar */
+.status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 16px;
+    height: 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.status-text {
+    color: #505050;
+    font-size: 9px;
+    font-weight: 400;
+}
+
+.graph-toggle-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: #505050;
+    width: 22px;
+    height: 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.graph-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #a0a0a0;
+}
+
+.graph-toggle-btn.active {
+    background: rgba(139, 92, 246, 0.2);
+    color: #8b5cf6;
+}
+
+/* Usage History Graph */
+.graph-section {
+    padding: 8px 16px 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    height: 170px;
+}
+
+.graph-section canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Sonnet row */
+.sonnet-row {
+    margin-top: -2px;
+}

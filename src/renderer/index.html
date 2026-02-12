@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://claude.ai">
     <title>Claude Usage Widget</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -130,6 +131,38 @@
                                 style="stroke-dasharray: 63; stroke-dashoffset: 63" />
                         </svg>
                     </div>
+                </div>
+
+                <!-- Weekly Sonnet Usage -->
+                <div class="usage-section sonnet-row" id="sonnetRow" style="display: none;">
+                    <span class="usage-label">Sonnet (7d)</span>
+                    <div class="progress-bar">
+                        <div class="progress-fill weekly" id="sonnetProgress" style="width: 0%"></div>
+                    </div>
+                    <span class="usage-percentage" id="sonnetPercentage">0%</span>
+                    <div class="timer-container">
+                        <div class="timer-text" id="sonnetTimeText">--:--</div>
+                        <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
+                            <circle class="timer-bg" cx="12" cy="12" r="10" />
+                            <circle class="timer-progress weekly" id="sonnetTimer" cx="12" cy="12" r="10"
+                                style="stroke-dasharray: 63; stroke-dashoffset: 63" />
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Status Bar -->
+                <div class="status-bar" id="statusBar">
+                    <span class="status-text" id="statusText">Refreshed just now</span>
+                    <button class="graph-toggle-btn" id="graphToggleBtn" title="Toggle usage graph">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Usage History Graph -->
+                <div class="graph-section" id="graphSection" style="display: none;">
+                    <canvas id="usageChart" width="440" height="140"></canvas>
                 </div>
 
                 <!-- Expand Toggle -->

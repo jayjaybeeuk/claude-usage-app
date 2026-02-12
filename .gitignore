@@ -36,3 +36,9 @@ yarn-error.log*
 # Cache
 .cache/
 .temp/
+
+# Claude Code
+.claude/
+
+# Serena
+.serena/

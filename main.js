@@ -299,6 +299,21 @@ ipcMain.on('open-external', (event, url) => {
   shell.openExternal(url);
 });
 
+// Usage history storage (30-day retention)
+ipcMain.handle('get-usage-history', () => {
+  return store.get('usageHistory', []);
+});
+
+ipcMain.handle('save-usage-history-entry', (event, entry) => {
+  const history = store.get('usageHistory', []);
+  history.push(entry);
+  // Prune entries older than 30 days
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const pruned = history.filter(e => e.timestamp >= cutoff);
+  store.set('usageHistory', pruned);
+  return true;
+});
+
 // Open a visible BrowserWindow for the user to log in to Claude.ai.
 //
 // Why we don't embed login directly in the app:

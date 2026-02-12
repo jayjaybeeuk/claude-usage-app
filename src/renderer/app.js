@@ -4,9 +4,16 @@ let updateInterval = null;
 let countdownInterval = null;
 let latestUsageData = null;
 let isExpanded = false;
+let isGraphVisible = false;
+let usageChart = null;
+let lastRefreshTime = null;
+let statusInterval = null;
 const UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const WIDGET_HEIGHT_COLLAPSED = 140;
 const WIDGET_ROW_HEIGHT = 30;
+const GRAPH_HEIGHT = 170; // graph section height including padding
+const STATUS_BAR_HEIGHT = 24; // status bar height
+const SONNET_ROW_HEIGHT = 30; // sonnet row height
 
 // Debug logging — only shows in DevTools (development mode).
 // Regular users won't see verbose logs in production.
@@ -44,6 +51,18 @@ const elements = {
     weeklyProgress: document.getElementById('weeklyProgress'),
     weeklyTimer: document.getElementById('weeklyTimer'),
     weeklyTimeText: document.getElementById('weeklyTimeText'),
+
+    sonnetRow: document.getElementById('sonnetRow'),
+    sonnetPercentage: document.getElementById('sonnetPercentage'),
+    sonnetProgress: document.getElementById('sonnetProgress'),
+    sonnetTimer: document.getElementById('sonnetTimer'),
+    sonnetTimeText: document.getElementById('sonnetTimeText'),
+
+    statusBar: document.getElementById('statusBar'),
+    statusText: document.getElementById('statusText'),
+    graphToggleBtn: document.getElementById('graphToggleBtn'),
+    graphSection: document.getElementById('graphSection'),
+    usageChart: document.getElementById('usageChart'),
 
     expandToggle: document.getElementById('expandToggle'),
     expandArrow: document.getElementById('expandArrow'),
@@ -125,6 +144,17 @@ function setupEventListeners() {
 
     elements.closeBtn.addEventListener('click', () => {
         window.electronAPI.closeWindow();
+    });
+
+    // Graph toggle
+    elements.graphToggleBtn.addEventListener('click', () => {
+        isGraphVisible = !isGraphVisible;
+        elements.graphSection.style.display = isGraphVisible ? 'block' : 'none';
+        elements.graphToggleBtn.classList.toggle('active', isGraphVisible);
+        if (isGraphVisible) {
+            renderUsageChart();
+        }
+        resizeWidget();
     });
 
     // Expand/collapse toggle
@@ -253,6 +283,24 @@ async function fetchUsageData() {
         const data = await window.electronAPI.fetchUsageData();
         debugLog('Received usage data:', data);
         updateUI(data);
+
+        // Record usage history entry
+        lastRefreshTime = Date.now();
+        updateStatusText();
+        startStatusTimer();
+
+        const historyEntry = {
+            timestamp: lastRefreshTime,
+            session: data.five_hour?.utilization || 0,
+            weekly: data.seven_day?.utilization || 0,
+            sonnet: data.seven_day_sonnet?.utilization || 0
+        };
+        await window.electronAPI.saveUsageHistoryEntry(historyEntry);
+
+        // Refresh graph if visible
+        if (isGraphVisible) {
+            renderUsageChart();
+        }
     } catch (error) {
         console.error('Error fetching usage data:', error);
         if (error.message.includes('SessionExpired') || error.message.includes('Unauthorized')) {
@@ -278,7 +326,7 @@ function hasNoUsage(data) {
 // Update UI with usage data
 // Extra row label mapping for API fields
 const EXTRA_ROW_CONFIG = {
-    seven_day_sonnet: { label: 'Sonnet (7d)', color: 'weekly' },
+    // seven_day_sonnet is shown as a dedicated row above, not in extras
     seven_day_opus: { label: 'Opus (7d)', color: 'opus' },
     seven_day_cowork: { label: 'Cowork (7d)', color: 'weekly' },
     seven_day_oauth_apps: { label: 'OAuth Apps (7d)', color: 'weekly' },
@@ -384,13 +432,29 @@ function refreshExtraTimers() {
 }
 
 function resizeWidget() {
+    let height = WIDGET_HEIGHT_COLLAPSED;
+
+    // Add Sonnet row if visible
+    const sonnetVisible = elements.sonnetRow.style.display !== 'none';
+    if (sonnetVisible) {
+        height += SONNET_ROW_HEIGHT;
+    }
+
+    // Add status bar
+    height += STATUS_BAR_HEIGHT;
+
+    // Add graph if visible
+    if (isGraphVisible) {
+        height += GRAPH_HEIGHT;
+    }
+
+    // Add expanded extra rows
     const extraCount = elements.extraRows.children.length;
     if (isExpanded && extraCount > 0) {
-        const expandedHeight = WIDGET_HEIGHT_COLLAPSED + 12 + (extraCount * WIDGET_ROW_HEIGHT);
-        window.electronAPI.resizeWindow(expandedHeight);
-    } else {
-        window.electronAPI.resizeWindow(WIDGET_HEIGHT_COLLAPSED);
+        height += 12 + (extraCount * WIDGET_ROW_HEIGHT);
     }
+
+    window.electronAPI.resizeWindow(height);
 }
 
 function updateUI(data) {
@@ -402,6 +466,26 @@ function updateUI(data) {
     }
 
     showMainContent();
+
+    // Show/hide Weekly Sonnet row
+    const sonnetData = data.seven_day_sonnet;
+    if (sonnetData && sonnetData.utilization !== undefined) {
+        elements.sonnetRow.style.display = '';
+        updateProgressBar(
+            elements.sonnetProgress,
+            elements.sonnetPercentage,
+            sonnetData.utilization
+        );
+        updateTimer(
+            elements.sonnetTimer,
+            elements.sonnetTimeText,
+            sonnetData.resets_at,
+            7 * 24 * 60
+        );
+    } else {
+        elements.sonnetRow.style.display = 'none';
+    }
+
     buildExtraRows(data);
     refreshTimers();
     if (isExpanded) refreshExtraTimers();
@@ -485,8 +569,28 @@ function startCountdown() {
     if (countdownInterval) clearInterval(countdownInterval);
     countdownInterval = setInterval(() => {
         refreshTimers();
+        refreshSonnetTimer();
         if (isExpanded) refreshExtraTimers();
     }, 1000);
+}
+
+function refreshSonnetTimer() {
+    if (!latestUsageData) return;
+    const sonnetData = latestUsageData.seven_day_sonnet;
+    if (!sonnetData || sonnetData.utilization === undefined) return;
+    if (elements.sonnetRow.style.display === 'none') return;
+
+    updateProgressBar(
+        elements.sonnetProgress,
+        elements.sonnetPercentage,
+        sonnetData.utilization
+    );
+    updateTimer(
+        elements.sonnetTimer,
+        elements.sonnetTimeText,
+        sonnetData.resets_at,
+        7 * 24 * 60
+    );
 }
 
 // Update progress bar
@@ -576,6 +680,10 @@ function showLoginRequired() {
     elements.sessionKeyError.textContent = '';
     elements.sessionKeyInput.value = '';
     stopAutoUpdate();
+    if (statusInterval) {
+        clearInterval(statusInterval);
+        statusInterval = null;
+    }
 }
 
 function showNoUsage() {
@@ -607,6 +715,166 @@ function stopAutoUpdate() {
     }
 }
 
+// Status bar "Refreshed X minutes ago" logic
+function updateStatusText() {
+    if (!lastRefreshTime) {
+        elements.statusText.textContent = 'Refreshed just now';
+        return;
+    }
+    const elapsed = Date.now() - lastRefreshTime;
+    const minutes = Math.floor(elapsed / 60000);
+    if (minutes < 1) {
+        elements.statusText.textContent = 'Refreshed just now';
+    } else if (minutes === 1) {
+        elements.statusText.textContent = 'Refreshed 1 minute ago';
+    } else {
+        elements.statusText.textContent = `Refreshed ${minutes} minutes ago`;
+    }
+}
+
+function startStatusTimer() {
+    if (statusInterval) clearInterval(statusInterval);
+    statusInterval = setInterval(updateStatusText, 30000); // update every 30s
+}
+
+// Lightweight Canvas 2D usage history chart (no external dependencies)
+async function renderUsageChart() {
+    try {
+    const history = await window.electronAPI.getUsageHistory();
+
+    // Filter to last 7 days
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recent = history.filter(e => e.timestamp >= sevenDaysAgo);
+
+    // Group by hour for cleaner display
+    const hourlyData = {};
+    for (const entry of recent) {
+        const date = new Date(entry.timestamp);
+        const hourKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`;
+        if (!hourlyData[hourKey] || entry.timestamp > hourlyData[hourKey].timestamp) {
+            hourlyData[hourKey] = entry;
+        }
+    }
+
+    const sortedKeys = Object.keys(hourlyData).sort();
+    const labels = sortedKeys.map(k => {
+        const parts = k.split(' ');
+        const dateParts = parts[0].split('-');
+        return `${dateParts[1]}/${dateParts[2]} ${parts[1]}`;
+    });
+    const sessionData = sortedKeys.map(k => hourlyData[k].session);
+    const weeklyData = sortedKeys.map(k => hourlyData[k].weekly);
+
+    const canvas = elements.usageChart;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = (rect.height - 16) * dpr; // account for padding
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = (rect.height - 16) + 'px';
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+
+    const w = rect.width;
+    const h = rect.height - 16;
+    const padLeft = 30;
+    const padRight = 10;
+    const padTop = 20;
+    const padBottom = 20;
+    const chartW = w - padLeft - padRight;
+    const chartH = h - padTop - padBottom;
+
+    // Clear
+    ctx.clearRect(0, 0, w, h);
+
+    // No data message
+    if (sortedKeys.length < 2) {
+        ctx.fillStyle = '#505050';
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Usage history will appear after a few refreshes', w / 2, h / 2);
+        return;
+    }
+
+    // Y-axis labels and grid
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif';
+    for (let pct = 0; pct <= 100; pct += 25) {
+        const y = padTop + chartH - (pct / 100) * chartH;
+        ctx.fillStyle = '#505050';
+        ctx.fillText(pct + '%', padLeft - 4, y);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y);
+        ctx.lineTo(padLeft + chartW, y);
+        ctx.stroke();
+    }
+
+    // X-axis labels (show ~6 labels)
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const labelStep = Math.max(1, Math.floor(sortedKeys.length / 6));
+    for (let i = 0; i < sortedKeys.length; i += labelStep) {
+        const x = padLeft + (i / (sortedKeys.length - 1)) * chartW;
+        ctx.fillStyle = '#505050';
+        ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(labels[i], x, padTop + chartH + 4);
+    }
+
+    // Draw line helper
+    function drawLine(data, color, fillColor) {
+        if (data.length < 2) return;
+        ctx.beginPath();
+        for (let i = 0; i < data.length; i++) {
+            const x = padLeft + (i / (data.length - 1)) * chartW;
+            const y = padTop + chartH - (data[i] / 100) * chartH;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Fill area
+        const lastX = padLeft + ((data.length - 1) / (data.length - 1)) * chartW;
+        ctx.lineTo(lastX, padTop + chartH);
+        ctx.lineTo(padLeft, padTop + chartH);
+        ctx.closePath();
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+    }
+
+    drawLine(sessionData, '#8b5cf6', 'rgba(139, 92, 246, 0.1)');
+    drawLine(weeklyData, '#3b82f6', 'rgba(59, 130, 246, 0.08)');
+
+    // Legend
+    const legendY = 6;
+    ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    // Session legend
+    ctx.fillStyle = '#8b5cf6';
+    ctx.fillRect(padLeft, legendY - 3, 10, 6);
+    ctx.fillStyle = '#a0a0a0';
+    ctx.fillText('Session', padLeft + 14, legendY);
+
+    // Weekly legend
+    const weeklyLegendX = padLeft + 60;
+    ctx.fillStyle = '#3b82f6';
+    ctx.fillRect(weeklyLegendX, legendY - 3, 10, 6);
+    ctx.fillStyle = '#a0a0a0';
+    ctx.fillText('Weekly', weeklyLegendX + 14, legendY);
+
+    } catch (error) {
+        debugLog('Chart rendering failed:', error);
+    }
+}
+
 // Add spinning animation for refresh button
 const style = document.createElement('style');
 style.textContent = `
@@ -628,4 +896,5 @@ init();
 window.addEventListener('beforeunload', () => {
     stopAutoUpdate();
     if (countdownInterval) clearInterval(countdownInterval);
+    if (statusInterval) clearInterval(statusInterval);
 });
