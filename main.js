@@ -38,7 +38,7 @@ function getAppIcon() {
   if (isWindows) {
     return path.join(__dirname, 'assets/icon.ico');
   }
-  return path.join(__dirname, 'assets/icon.png');
+  return path.join(__dirname, 'assets/icon.icns');
 }
 
 // Set sessionKey as a cookie in Electron's session
