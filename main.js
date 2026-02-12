@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, session, shell, nativeImage, net } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, session, shell, nativeImage, } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 const { fetchViaWindow } = require('./src/fetch-via-window');
@@ -17,8 +17,6 @@ function debugLog(...args) {
   if (DEBUG) console.log('[Debug]', ...args);
 }
 
-const CHROME_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-
 let mainWindow = null;
 let tray = null;
 
@@ -28,12 +26,11 @@ const WIDGET_HEIGHT = 140;
 // Platform-specific User-Agent
 const USER_AGENT = isMac
   ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-  : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-
+  : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 // Set session-level User-Agent to avoid Electron detection
 app.on('ready', () => {
-  session.defaultSession.setUserAgent(CHROME_USER_AGENT);
+  session.defaultSession.setUserAgent(USER_AGENT);
 });
 
 // Platform-specific icon
@@ -125,271 +122,6 @@ function createMainWindow() {
   }
 }
 
-function createLoginWindow() {
-  loginWindow = new BrowserWindow({
-    width: 800,
-    height: 700,
-    parent: mainWindow,
-    modal: true,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true
-    }
-  });
-
-  loginWindow.loadURL('https://claude.ai');
-
-  let loginCheckInterval = null;
-  let hasLoggedIn = false;
-
-  // Function to check login status
-  async function checkLoginStatus() {
-    if (hasLoggedIn || !loginWindow) return;
-
-    try {
-      const cookies = await session.defaultSession.cookies.get({
-        url: 'https://claude.ai',
-        name: 'sessionKey'
-      });
-
-      if (cookies.length > 0) {
-        const sessionKey = cookies[0].value;
-        console.log('Session key found, attempting to get org ID...');
-
-        // Fetch org ID from API
-        let orgId = null;
-        try {
-          const response = await axios.get('https://claude.ai/api/organizations', {
-            headers: {
-              'Cookie': `sessionKey=${sessionKey}`,
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-          });
-          const sessionKey = sessionKeyCookie[0]?.value;
-          console.log('Session key found, attempting to get org ID...');
-
-          // Fetch org ID from API
-          let orgId = null;
-          try {
-            await logClaudeCookieNames('Login');
-            orgId = await fetchOrgIdViaWindow(loginWindow, 'Login');
-            if (!orgId) {
-              const orgs = await claudeGetJson('https://claude.ai/api/organizations');
-              if (orgs && Array.isArray(orgs) && orgs.length > 0) {
-                orgId = orgs[0].uuid || orgs[0].id;
-              }
-            }
-            if (orgId) {
-              console.log('Org ID fetched from API:', orgId);
-            }
-          } catch (err) {
-            console.log('API not ready yet:', err.message);
-          }
-
-        if (sessionKey && orgId) {
-          hasLoggedIn = true;
-          if (loginCheckInterval) {
-            clearInterval(loginCheckInterval);
-            loginCheckInterval = null;
-          }
-
-          console.log('Sending login-success to main window...');
-          store.set('sessionKey', sessionKey);
-          store.set('organizationId', orgId);
-
-          if (mainWindow) {
-            mainWindow.webContents.send('login-success', { sessionKey, organizationId: orgId });
-            console.log('login-success sent');
-          } else {
-            console.error('mainWindow is null, cannot send login-success');
-          }
-
-          loginWindow.close();
-        }
-      }
-    } catch (error) {
-      console.error('Error in login check:', error);
-    }
-  }
-
-  // Check on page load
-  loginWindow.webContents.on('did-finish-load', async () => {
-    const url = loginWindow.webContents.getURL();
-    console.log('Login page loaded:', url);
-
-    if (url.includes('claude.ai')) {
-      await checkLoginStatus();
-    }
-  });
-
-  // Also check on navigation (URL changes)
-  loginWindow.webContents.on('did-navigate', async (event, url) => {
-    console.log('Navigated to:', url);
-    if (url.includes('claude.ai')) {
-      await checkLoginStatus();
-    }
-  });
-
-  // Poll periodically in case the session becomes ready without a page navigation
-  loginCheckInterval = setInterval(async () => {
-    if (!hasLoggedIn && loginWindow) {
-      await checkLoginStatus();
-    } else if (loginCheckInterval) {
-      clearInterval(loginCheckInterval);
-      loginCheckInterval = null;
-    }
-  }, 2000);
-
-  loginWindow.on('closed', () => {
-    if (loginCheckInterval) {
-      clearInterval(loginCheckInterval);
-      loginCheckInterval = null;
-    }
-    loginWindow = null;
-  });
-}
-
-// Attempt silent login in a hidden browser window
-async function attemptSilentLogin() {
-  console.log('[Main] Attempting silent login...');
-
-  // Notify renderer that we're trying to auto-login
-  if (mainWindow) {
-    mainWindow.webContents.send('silent-login-started');
-  }
-
-  return new Promise((resolve) => {
-    silentLoginWindow = new BrowserWindow({
-      width: 800,
-      height: 700,
-      show: false, // Hidden window
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true
-      }
-    });
-
-    silentLoginWindow.loadURL('https://claude.ai');
-
-    let loginCheckInterval = null;
-    let hasLoggedIn = false;
-    const SILENT_LOGIN_TIMEOUT = 15000; // 15 seconds timeout
-
-    // Function to check login status
-    async function checkLoginStatus() {
-      if (hasLoggedIn || !silentLoginWindow) return;
-
-      try {
-        const cookieHeader = await getClaudeCookieHeader();
-        if (cookieHeader) {
-          const sessionKeyCookie = await session.defaultSession.cookies.get({
-            url: 'https://claude.ai',
-            name: 'sessionKey'
-          });
-          const sessionKey = sessionKeyCookie[0]?.value;
-          console.log('[Main] Silent login: Session key found, attempting to get org ID...');
-
-          // Fetch org ID from API
-          let orgId = null;
-          try {
-            const response = await axios.get('https://claude.ai/api/organizations', {
-              headers: {
-                'Cookie': `sessionKey=${sessionKey}`,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-              }
-            }
-            if (orgId) {
-              console.log('[Main] Silent login: Org ID fetched from API:', orgId);
-            }
-          } catch (err) {
-            console.log('[Main] Silent login: API not ready yet:', err.message);
-          }
-
-          if (sessionKey && orgId) {
-            hasLoggedIn = true;
-            if (loginCheckInterval) {
-              clearInterval(loginCheckInterval);
-              loginCheckInterval = null;
-            }
-
-            console.log('[Main] Silent login successful!');
-            store.set('sessionKey', sessionKey);
-            store.set('organizationId', orgId);
-
-            if (mainWindow) {
-              mainWindow.webContents.send('login-success', { sessionKey, organizationId: orgId });
-            }
-
-            silentLoginWindow.close();
-            resolve(true);
-          }
-        }
-      } catch (error) {
-        console.error('[Main] Silent login check error:', error);
-      }
-    }
-
-    // Check on page load
-    silentLoginWindow.webContents.on('did-finish-load', async () => {
-      const url = silentLoginWindow.webContents.getURL();
-      console.log('[Main] Silent login page loaded:', url);
-
-      if (url.includes('claude.ai')) {
-        await checkLoginStatus();
-      }
-    });
-
-    // Also check on navigation
-    silentLoginWindow.webContents.on('did-navigate', async (event, url) => {
-      console.log('[Main] Silent login navigated to:', url);
-      if (url.includes('claude.ai')) {
-        await checkLoginStatus();
-      }
-    });
-
-    // Poll periodically
-    loginCheckInterval = setInterval(async () => {
-      if (!hasLoggedIn && silentLoginWindow) {
-        await checkLoginStatus();
-      } else if (loginCheckInterval) {
-        clearInterval(loginCheckInterval);
-        loginCheckInterval = null;
-      }
-    }, 1000);
-
-    // Timeout - if silent login doesn't work, fall back to visible login
-    setTimeout(() => {
-      if (!hasLoggedIn) {
-        console.log('[Main] Silent login timeout, falling back to visible login...');
-        if (loginCheckInterval) {
-          clearInterval(loginCheckInterval);
-          loginCheckInterval = null;
-        }
-        if (silentLoginWindow) {
-          silentLoginWindow.close();
-        }
-
-        // Notify renderer that silent login failed
-        if (mainWindow) {
-          mainWindow.webContents.send('silent-login-failed');
-        }
-
-        // Open visible login window
-        createLoginWindow();
-        resolve(false);
-      }
-    }, SILENT_LOGIN_TIMEOUT);
-
-    silentLoginWindow.on('closed', () => {
-      if (loginCheckInterval) {
-        clearInterval(loginCheckInterval);
-        loginCheckInterval = null;
-      }
-      silentLoginWindow = null;
-    });
-  });
-}
-
 function createTray() {
   try {
     tray = new Tray(getTrayIcon());
@@ -436,7 +168,7 @@ function createTray() {
       },
       { type: 'separator' },
       {
-        label: 'Quit',
+        label: 'Exit',
         click: () => {
           app.quit();
         }
@@ -661,6 +393,40 @@ ipcMain.handle('fetch-usage-data', async () => {
     }
     throw error;
   }
+
+  const data = usageResult.value;
+
+  // Merge overage spending data into data.extra_usage
+  if (overageResult.status === 'fulfilled' && overageResult.value) {
+    const overage = overageResult.value;
+    const limit = overage.monthly_credit_limit ?? overage.spend_limit_amount_cents;
+    const used = overage.used_credits ?? overage.balance_cents;
+    const enabled = overage.is_enabled !== undefined ? overage.is_enabled : (limit != null);
+
+    if (enabled && typeof limit === 'number' && limit > 0 && typeof used === 'number') {
+      data.extra_usage = {
+        utilization: (used / limit) * 100,
+        resets_at: null,
+        used_cents: used,
+        limit_cents: limit,
+      };
+    }
+  } else {
+    debugLog('Overage fetch skipped or failed:', overageResult.reason?.message || 'no data');
+  }
+
+  // Merge prepaid balance into data.extra_usage
+  if (prepaidResult.status === 'fulfilled' && prepaidResult.value) {
+    const prepaid = prepaidResult.value;
+    if (typeof prepaid.amount === 'number') {
+      if (!data.extra_usage) data.extra_usage = {};
+      data.extra_usage.balance_cents = prepaid.amount;
+    }
+  } else {
+    debugLog('Prepaid fetch skipped or failed:', prepaidResult.reason?.message || 'no data');
+  }
+
+  return data;
 });
 
 // macOS: Set up application menu (required for keyboard shortcuts like Cmd+Q, Cmd+C, Cmd+V)
