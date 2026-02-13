@@ -648,7 +648,7 @@ body.platform-darwin .title-bar {
 }
 
 .settings-content {
-    padding: 0 24px;
+    padding: 0;
     width: 100%;
     text-align: center;
     position: relative;

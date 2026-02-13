@@ -123,64 +123,107 @@ function createMainWindow() {
   }
 }
 
+// Cached usage stats for tray display
+let latestTrayStats = null;
+
+function buildTrayMenu() {
+  const items = [];
+
+  // Usage stats at the top of the dropdown
+  if (latestTrayStats) {
+    items.push({
+      label: `Session:  ${Math.round(latestTrayStats.session)}%`,
+      enabled: false
+    });
+    items.push({
+      label: `Weekly:   ${Math.round(latestTrayStats.weekly)}%`,
+      enabled: false
+    });
+    if (latestTrayStats.sonnet > 0) {
+      items.push({
+        label: `Sonnet:   ${Math.round(latestTrayStats.sonnet)}%`,
+        enabled: false
+      });
+    }
+    items.push({ type: 'separator' });
+  }
+
+  items.push(
+    {
+      label: 'Show Widget',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          if (isMac) mainWindow.focus();
+        } else {
+          createMainWindow();
+        }
+      }
+    },
+    {
+      label: 'Refresh',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.webContents.send('refresh-usage');
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Log Out',
+      click: async () => {
+        store.delete('sessionKey');
+        store.delete('organizationId');
+        const cookies = await session.defaultSession.cookies.get({ url: 'https://claude.ai' });
+        for (const cookie of cookies) {
+          await session.defaultSession.cookies.remove('https://claude.ai', cookie.name);
+        }
+        await session.defaultSession.clearStorageData({
+          storages: ['localstorage', 'sessionstorage', 'cachestorage'],
+          origin: 'https://claude.ai'
+        });
+        if (mainWindow) {
+          mainWindow.webContents.send('session-expired');
+        }
+        latestTrayStats = null;
+        updateTrayDisplay();
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Exit',
+      click: () => {
+        app.quit();
+      }
+    }
+  );
+
+  return Menu.buildFromTemplate(items);
+}
+
+function updateTrayDisplay() {
+  if (!tray) return;
+
+  if (isMac && latestTrayStats) {
+    tray.setTitle(`${Math.round(latestTrayStats.weekly)}%`, { fontType: 'monospacedDigit' });
+  } else if (isMac) {
+    tray.setTitle('');
+  }
+
+  tray.setContextMenu(buildTrayMenu());
+
+  if (latestTrayStats) {
+    tray.setToolTip(`Claude — Session: ${Math.round(latestTrayStats.session)}% | Weekly: ${Math.round(latestTrayStats.weekly)}%`);
+  } else {
+    tray.setToolTip('Claude Usage Widget');
+  }
+}
+
 function createTray() {
   try {
     tray = new Tray(getTrayIcon());
+    updateTrayDisplay();
 
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: 'Show Widget',
-        click: () => {
-          if (mainWindow) {
-            mainWindow.show();
-            if (isMac) mainWindow.focus();
-          } else {
-            createMainWindow();
-          }
-        }
-      },
-      {
-        label: 'Refresh',
-        click: () => {
-          if (mainWindow) {
-            mainWindow.webContents.send('refresh-usage');
-          }
-        }
-      },
-      { type: 'separator' },
-      {
-        label: 'Log Out',
-        click: async () => {
-          store.delete('sessionKey');
-          store.delete('organizationId');
-          // Clear all Claude.ai cookies and session storage
-          const cookies = await session.defaultSession.cookies.get({ url: 'https://claude.ai' });
-          for (const cookie of cookies) {
-            await session.defaultSession.cookies.remove('https://claude.ai', cookie.name);
-          }
-          await session.defaultSession.clearStorageData({
-            storages: ['localstorage', 'sessionstorage', 'cachestorage'],
-            origin: 'https://claude.ai'
-          });
-          if (mainWindow) {
-            mainWindow.webContents.send('session-expired');
-          }
-        }
-      },
-      { type: 'separator' },
-      {
-        label: 'Exit',
-        click: () => {
-          app.quit();
-        }
-      }
-    ]);
-
-    tray.setToolTip('Claude Usage Widget');
-    tray.setContextMenu(contextMenu);
-
-    // On macOS, clicking the tray icon shows the context menu by default
-    // On Windows/Linux, toggle window visibility on click
     if (!isMac) {
       tray.on('click', () => {
         if (mainWindow) {
@@ -298,6 +341,12 @@ ipcMain.handle('set-window-position', (event, { x, y }) => {
 
 ipcMain.on('open-external', (event, url) => {
   shell.openExternal(url);
+});
+
+// Update tray with latest usage stats from renderer
+ipcMain.on('update-tray-usage', (event, stats) => {
+  latestTrayStats = stats;
+  updateTrayDisplay();
 });
 
 // Usage history storage (30-day retention)

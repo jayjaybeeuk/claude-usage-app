@@ -73,7 +73,8 @@ const elements = {
     closeSettingsBtn: document.getElementById('closeSettingsBtn'),
     logoutBtn: document.getElementById('logoutBtn'),
     clearHistoryBtn: document.getElementById('clearHistoryBtn'),
-    coffeeBtn: document.getElementById('coffeeBtn')
+    coffeeBtn: document.getElementById('coffeeBtn'),
+    coffeeBtnAlt: document.getElementById('coffeeBtnAlt')
 };
 
 // Initialize
@@ -196,6 +197,10 @@ function setupEventListeners() {
         window.electronAPI.openExternal('https://paypal.me/SlavomirDurej?country.x=GB&locale.x=en_GB');
     });
 
+    elements.coffeeBtnAlt.addEventListener('click', () => {
+        window.electronAPI.openExternal('https://paypal.me/JamesBolton?country.x=GB&locale.x=en_GB');
+    });
+
     // Listen for refresh requests from tray
     window.electronAPI.onRefreshUsage(async () => {
         await fetchUsageData();
@@ -307,6 +312,13 @@ async function fetchUsageData() {
             sonnet: data.seven_day_sonnet?.utilization || 0
         };
         await window.electronAPI.saveUsageHistoryEntry(historyEntry);
+
+        // Update tray with latest stats
+        window.electronAPI.updateTrayUsage({
+            session: historyEntry.session,
+            weekly: historyEntry.weekly,
+            sonnet: historyEntry.sonnet
+        });
 
         // Refresh graph if visible
         if (isGraphVisible) {

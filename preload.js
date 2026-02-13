@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // API
   fetchUsageData: () => ipcRenderer.invoke('fetch-usage-data'),
   openExternal: (url) => ipcRenderer.send('open-external', url),
+  updateTrayUsage: (stats) => ipcRenderer.send('update-tray-usage', stats),
 
   // Usage history
   getUsageHistory: () => ipcRenderer.invoke('get-usage-history'),
