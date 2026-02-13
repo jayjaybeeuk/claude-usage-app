@@ -1,0 +1,342 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump-override:
+        description: 'Force a specific version bump (leave empty for auto-detection from commits)'
+        required: false
+        type: choice
+        options:
+          - ''
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
+      new_tag: ${{ steps.bump.outputs.new_tag }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+      skipped: ${{ steps.bump.outputs.skipped }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get latest tag
+        id: latest_tag
+        run: |
+          TAG=$(git tag -l 'v*' --sort=-v:refname | head -n 1)
+          if [ -z "$TAG" ]; then
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "No existing tags found, will use all commits"
+          else
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "Latest tag: $TAG"
+          fi
+
+      - name: Determine version bump from conventional commits
+        id: bump
+        run: |
+          LATEST_TAG="${{ steps.latest_tag.outputs.tag }}"
+          OVERRIDE="${{ inputs.bump-override }}"
+
+          # Get commits since last tag (or all commits if no tag)
+          if [ -z "$LATEST_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"%s" 2>/dev/null)
+          else
+            COMMITS=$(git log "${LATEST_TAG}..HEAD" --pretty=format:"%s" 2>/dev/null)
+          fi
+
+          if [ -z "$COMMITS" ]; then
+            echo "No new commits since last tag"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+          # Determine bump type from commits (or use override)
+          if [ -n "$OVERRIDE" ]; then
+            BUMP="$OVERRIDE"
+            echo "Using override bump: $BUMP"
+          else
+            BUMP="patch"
+            while IFS= read -r msg; do
+              # BREAKING CHANGE → major
+              if echo "$msg" | grep -qiE '^[a-z]+(\(.+\))?!:|BREAKING CHANGE'; then
+                BUMP="major"
+                break
+              fi
+              # feat → minor
+              if echo "$msg" | grep -qE '^feat(\(.+\))?:'; then
+                BUMP="minor"
+              fi
+            done <<< "$COMMITS"
+            echo "Auto-detected bump: $BUMP"
+          fi
+
+          # Read current version from package.json
+          CURRENT=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT"
+
+          # Calculate new version
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+
+          echo "New version: $NEW_VERSION"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "new_tag=v$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog
+        id: changelog
+        if: steps.bump.outputs.skipped != 'true'
+        run: |
+          LATEST_TAG="${{ steps.latest_tag.outputs.tag }}"
+
+          if [ -z "$LATEST_TAG" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${LATEST_TAG}..HEAD"
+          fi
+
+          # Collect commits by type
+          FEATURES=""
+          FIXES=""
+          OTHER=""
+
+          while IFS= read -r line; do
+            HASH=$(echo "$line" | cut -d' ' -f1)
+            MSG=$(echo "$line" | cut -d' ' -f2-)
+            SHORT_HASH="${HASH:0:7}"
+
+            if echo "$MSG" | grep -qE '^feat(\(.+\))?:'; then
+              DESC=$(echo "$MSG" | sed -E 's/^feat(\([^)]+\))?:\s*//')
+              SCOPE=$(echo "$MSG" | sed -nE 's/^feat\(([^)]+)\):.*/\1/p')
+              if [ -n "$SCOPE" ]; then
+                FEATURES="${FEATURES}- **${SCOPE}:** ${DESC} (${SHORT_HASH})\n"
+              else
+                FEATURES="${FEATURES}- ${DESC} (${SHORT_HASH})\n"
+              fi
+            elif echo "$MSG" | grep -qE '^fix(\(.+\))?:'; then
+              DESC=$(echo "$MSG" | sed -E 's/^fix(\([^)]+\))?:\s*//')
+              SCOPE=$(echo "$MSG" | sed -nE 's/^fix\(([^)]+)\):.*/\1/p')
+              if [ -n "$SCOPE" ]; then
+                FIXES="${FIXES}- **${SCOPE}:** ${DESC} (${SHORT_HASH})\n"
+              else
+                FIXES="${FIXES}- ${DESC} (${SHORT_HASH})\n"
+              fi
+            else
+              # Skip merge commits
+              if ! echo "$MSG" | grep -qE '^Merge '; then
+                OTHER="${OTHER}- ${MSG} (${SHORT_HASH})\n"
+              fi
+            fi
+          done < <(git log "$RANGE" --pretty=format:"%H %s" 2>/dev/null)
+
+          # Build changelog
+          CHANGELOG=""
+          if [ -n "$FEATURES" ]; then
+            CHANGELOG="${CHANGELOG}### Features\n${FEATURES}\n"
+          fi
+          if [ -n "$FIXES" ]; then
+            CHANGELOG="${CHANGELOG}### Bug Fixes\n${FIXES}\n"
+          fi
+          if [ -n "$OTHER" ]; then
+            CHANGELOG="${CHANGELOG}### Other Changes\n${OTHER}\n"
+          fi
+
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="Maintenance release.\n"
+          fi
+
+          # Write changelog to file for the release step
+          echo -e "$CHANGELOG" > /tmp/changelog.md
+          cat /tmp/changelog.md
+
+          # Pass via environment file (handles multiline)
+          {
+            echo "changelog<<CHANGELOG_EOF"
+            echo -e "$CHANGELOG"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Bump version in package.json
+        if: steps.bump.outputs.skipped != 'true'
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '${NEW_VERSION}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          echo "Updated package.json to version $NEW_VERSION"
+          cat package.json | head -5
+
+      - name: Commit and tag
+        if: steps.bump.outputs.skipped != 'true'
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
+          NEW_TAG="${{ steps.bump.outputs.new_tag }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git commit -m "chore(release): ${NEW_TAG}"
+          git tag "$NEW_TAG"
+          git push origin HEAD
+          git push origin "$NEW_TAG"
+
+  build-windows:
+    needs: version
+    if: needs.version.outputs.skipped != 'true'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.new_tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Electron app (Setup + Portable)
+        run: npm run build:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Setup installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-Setup
+          path: dist/*Setup*.exe
+          if-no-files-found: error
+
+      - name: Upload Portable executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-Portable
+          path: dist/*portable*.exe
+          if-no-files-found: error
+
+  build-macos:
+    needs: version
+    if: needs.version.outputs.skipped != 'true'
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.new_tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Electron app (DMG + ZIP)
+        run: npm run build:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-DMG
+          path: dist/*.dmg
+          if-no-files-found: error
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-macOS-ZIP
+          path: dist/*.zip
+          if-no-files-found: error
+
+  build-linux:
+    needs: version
+    if: needs.version.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.new_tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Electron app (AppImage)
+        run: npm run build:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-Widget-AppImage
+          path: dist/*.AppImage
+          if-no-files-found: error
+
+  release:
+    needs: [version, build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.new_tag }}
+          name: ${{ needs.version.outputs.new_tag }}
+          body: |
+            ## What's Changed in ${{ needs.version.outputs.new_tag }}
+
+            ${{ needs.version.outputs.changelog }}
+
+            ---
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ needs.version.outputs.new_tag }}
+          files: |
+            artifacts/Claude-Usage-Widget-Setup/*
+            artifacts/Claude-Usage-Widget-Portable/*
+            artifacts/Claude-Usage-Widget-DMG/*
+            artifacts/Claude-Usage-Widget-macOS-ZIP/*
+            artifacts/Claude-Usage-Widget-AppImage/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
