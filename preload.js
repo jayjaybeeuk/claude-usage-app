@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Usage history
   getUsageHistory: () => ipcRenderer.invoke('get-usage-history'),
   saveUsageHistoryEntry: (entry) => ipcRenderer.invoke('save-usage-history-entry', entry),
+  clearUsageHistory: () => ipcRenderer.invoke('clear-usage-history'),
 
   // Platform info
   getPlatform: () => ipcRenderer.invoke('get-platform'),

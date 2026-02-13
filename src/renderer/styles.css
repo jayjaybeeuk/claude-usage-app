@@ -726,6 +726,25 @@ body.platform-darwin .title-bar {
     padding-top: 4px;
 }
 
+.clear-history-btn {
+    background: transparent;
+    color: #a0a0a0;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.clear-history-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #e0e0e0;
+}
+
 .logout-btn {
     background: transparent;
     color: #ef4444;

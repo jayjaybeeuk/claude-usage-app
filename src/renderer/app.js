@@ -72,6 +72,7 @@ const elements = {
     settingsOverlay: document.getElementById('settingsOverlay'),
     closeSettingsBtn: document.getElementById('closeSettingsBtn'),
     logoutBtn: document.getElementById('logoutBtn'),
+    clearHistoryBtn: document.getElementById('clearHistoryBtn'),
     coffeeBtn: document.getElementById('coffeeBtn')
 };
 
@@ -178,6 +179,17 @@ function setupEventListeners() {
         credentials = { sessionKey: null, organizationId: null };
         elements.settingsOverlay.style.display = 'none';
         showLoginRequired();
+    });
+
+    elements.clearHistoryBtn.addEventListener('click', async () => {
+        await window.electronAPI.clearUsageHistory();
+        elements.clearHistoryBtn.textContent = 'Cleared!';
+        setTimeout(() => {
+            elements.clearHistoryBtn.textContent = 'Clear History';
+        }, 1500);
+        if (isGraphVisible) {
+            renderUsageChart();
+        }
     });
 
     elements.coffeeBtn.addEventListener('click', () => {

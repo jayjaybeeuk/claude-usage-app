@@ -305,6 +305,11 @@ ipcMain.handle('get-usage-history', () => {
   return store.get('usageHistory', []);
 });
 
+ipcMain.handle('clear-usage-history', () => {
+  store.set('usageHistory', []);
+  return true;
+});
+
 ipcMain.handle('save-usage-history-entry', (event, entry) => {
   const history = store.get('usageHistory', []);
   history.push(entry);
