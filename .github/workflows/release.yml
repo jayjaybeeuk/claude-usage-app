@@ -216,10 +216,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: '22.12'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build Electron app (Setup + Portable)
         run: npm run package:win
@@ -253,10 +253,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: '22.12'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build Electron app (DMG + ZIP)
         run: npm run package:mac
@@ -291,10 +291,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: '22.12'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build Electron app (AppImage)
         run: npm run package:linux
