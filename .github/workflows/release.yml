@@ -222,7 +222,7 @@ jobs:
         run: npm install
 
       - name: Build Electron app (Setup + Portable)
-        run: npm run build:win
+        run: npm run package:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -259,7 +259,7 @@ jobs:
         run: npm install
 
       - name: Build Electron app (DMG + ZIP)
-        run: npm run build:mac
+        run: npm run package:mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
@@ -297,7 +297,7 @@ jobs:
         run: npm install
 
       - name: Build Electron app (AppImage)
-        run: npm run build:linux
+        run: npm run package:linux
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

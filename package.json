@@ -2,16 +2,26 @@
   "name": "claude-usage-widget",
   "version": "1.4.0",
   "description": "Desktop widget for Claude.ai usage monitoring",
-  "main": "main.js",
+  "main": "dist-main/main/main.js",
   "scripts": {
+    "dev": "concurrently -n tsc,vite,electron -c blue,green,yellow \"npm run dev:main\" \"npm run dev:renderer\" \"npm run dev:electron\"",
+    "dev:main": "tsc -p tsconfig.main.json --watch",
+    "dev:renderer": "vite",
+    "dev:electron": "wait-on http://localhost:5173 && wait-on dist-main/main/main.js && cross-env NODE_ENV=development electron .",
+    "dev:debug": "concurrently -n tsc,vite,electron -c blue,green,yellow \"npm run dev:main\" \"npm run dev:renderer\" \"npm run dev:debug:electron\"",
+    "dev:debug:electron": "wait-on http://localhost:5173 && wait-on dist-main/main/main.js && cross-env DEBUG_LOG=1 NODE_ENV=development electron .",
+    "clean": "rm -rf dist-main dist-renderer",
+    "build": "npm run clean && npm run build:ts && npm run build:renderer",
+    "build:ts": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build",
     "start": "electron .",
-    "start:debug": "cross-env DEBUG_AUTH=1 electron .",
-    "start:debug:dev": "cross-env DEBUG_AUTH=1 NODE_ENV=development electron .",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux",
-    "dev": "cross-env NODE_ENV=development electron ."
+    "start:debug": "cross-env DEBUG_LOG=1 electron .",
+    "start:debug:dev": "npm run dev:debug",
+    "package": "npm run build && electron-builder",
+    "package:win": "npm run build && electron-builder --win",
+    "package:mac": "npm run build && electron-builder --mac",
+    "package:linux": "npm run build && electron-builder --linux",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit"
   },
   "keywords": [
     "claude",
@@ -26,9 +36,14 @@
     "npm": ">=9.0.0"
   },
   "devDependencies": {
+    "@types/node": "^25.2.3",
+    "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
     "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "wait-on": "^9.0.4"
   },
   "dependencies": {
     "electron-store": "^8.1.0"
@@ -36,6 +51,27 @@
   "build": {
     "appId": "com.claudeusage.widget",
     "productName": "Claude Usage Widget",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "dist-main/**/*",
+      "dist-renderer/**/*",
+      "assets/**/*",
+      "package.json",
+      "!src",
+      "!**/*.ts",
+      "!**/*.map",
+      "!tsconfig*.json",
+      "!vite.config.ts",
+      "!*.md",
+      "!.github",
+      "!.claude",
+      "!.gitignore"
+    ],
+    "extraMetadata": {
+      "main": "dist-main/main/main.js"
+    },
     "win": {
       "target": [
         "nsis",
@@ -79,11 +115,6 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
-    },
-    "files": [
-      "**/*",
-      "!**/*.ts",
-      "!*.md"
-    ]
+    }
   }
 }

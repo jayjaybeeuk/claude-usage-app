@@ -4,7 +4,13 @@
       "Bash(dir:*)",
       "Bash(npm install:*)",
       "Bash(npm uninstall:*)",
-      "Bash(sips:*)"
+      "Bash(sips:*)",
+      "Bash(node -e:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(npx asar:*)",
+      "Bash(npm run package:mac:*)"
     ]
   }
 }

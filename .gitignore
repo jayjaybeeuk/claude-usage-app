@@ -1,11 +1,13 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # Build output
 dist/
+dist-main/
+dist-renderer/
 build/
 out/
+*.tsbuildinfo
 
 # OS files
 .DS_Store
