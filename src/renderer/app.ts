@@ -1,4 +1,5 @@
 import './styles.css'
+import { DEFAULT_REFRESH_MINUTES, MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES } from '../shared/refresh-interval'
 import type { Credentials, UsageData, UsageTimePeriod, ExtraUsage, UsageHistoryEntry } from '../shared/ipc-types'
 
 // Application state
@@ -10,11 +11,13 @@ let isExpanded = false
 let isGraphVisible = false
 let lastRefreshTime: number | null = null
 let statusInterval: ReturnType<typeof setInterval> | null = null
-const UPDATE_INTERVAL = 5 * 60 * 1000 // 5 minutes
+let refreshIntervalMinutes = DEFAULT_REFRESH_MINUTES
+let isSettingsOpen = false
 const WIDGET_HEIGHT_COLLAPSED = 164 // 140 base + 24 status bar
 const WIDGET_ROW_HEIGHT = 30
 const GRAPH_HEIGHT = 170 // graph section height including padding
 const SONNET_ROW_HEIGHT = 30 // sonnet row height
+let lastNonSettingsHeight = WIDGET_HEIGHT_COLLAPSED
 
 // Debug logging — only shows in DevTools (development mode).
 // Regular users won't see verbose logs in production.
@@ -79,11 +82,50 @@ const elements = {
 
   settingsBtn: getElement<HTMLButtonElement>('settingsBtn'),
   settingsOverlay: getElement<HTMLDivElement>('settingsOverlay'),
+  settingsContent: getElement<HTMLDivElement>('settingsContent'),
   closeSettingsBtn: getElement<HTMLButtonElement>('closeSettingsBtn'),
   logoutBtn: getElement<HTMLButtonElement>('logoutBtn'),
   clearHistoryBtn: getElement<HTMLButtonElement>('clearHistoryBtn'),
   coffeeBtn: getElement<HTMLButtonElement>('coffeeBtn'),
   coffeeBtnAlt: getElement<HTMLButtonElement>('coffeeBtnAlt'),
+  refreshIntervalSlider: getElement<HTMLInputElement>('refreshIntervalSlider'),
+  refreshIntervalValue: getElement<HTMLSpanElement>('refreshIntervalValue'),
+}
+
+function clampRefreshMinutes(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_REFRESH_MINUTES
+  return Math.min(MAX_REFRESH_MINUTES, Math.max(MIN_REFRESH_MINUTES, Math.round(value)))
+}
+
+function formatRefreshInterval(minutes: number): string {
+  return `${minutes} minute${minutes === 1 ? '' : 's'}`
+}
+
+function updateRefreshIntervalUI(minutes: number): void {
+  elements.refreshIntervalSlider.value = String(minutes)
+  elements.refreshIntervalValue.textContent = formatRefreshInterval(minutes)
+}
+
+function resizeForSettings(): void {
+  const contentHeight = Math.ceil(elements.settingsContent.getBoundingClientRect().height)
+  const height = Math.max(WIDGET_HEIGHT_COLLAPSED, contentHeight + 140)
+  window.electronAPI.resizeWindow(height)
+}
+
+async function loadRefreshInterval(): Promise<void> {
+  const saved = await window.electronAPI.getRefreshIntervalMinutes()
+  refreshIntervalMinutes = clampRefreshMinutes(saved)
+  updateRefreshIntervalUI(refreshIntervalMinutes)
+}
+
+async function setRefreshIntervalMinutes(minutes: number): Promise<void> {
+  const clamped = clampRefreshMinutes(minutes)
+  const stored = await window.electronAPI.setRefreshIntervalMinutes(clamped)
+  refreshIntervalMinutes = clampRefreshMinutes(stored)
+  updateRefreshIntervalUI(refreshIntervalMinutes)
+  if (credentials?.sessionKey && credentials.organizationId) {
+    startAutoUpdate()
+  }
 }
 
 // Initialize
@@ -99,6 +141,7 @@ async function init(): Promise<void> {
   }
 
   setupEventListeners()
+  await loadRefreshInterval()
   credentials = await window.electronAPI.getCredentials()
 
   if (credentials.sessionKey && credentials.organizationId) {
@@ -178,17 +221,34 @@ function setupEventListeners(): void {
   // Settings calls
   elements.settingsBtn.addEventListener('click', () => {
     elements.settingsOverlay.style.display = 'flex'
+    isSettingsOpen = true
+    requestAnimationFrame(() => resizeForSettings())
   })
 
   elements.closeSettingsBtn.addEventListener('click', () => {
     elements.settingsOverlay.style.display = 'none'
+    isSettingsOpen = false
+    window.electronAPI.resizeWindow(lastNonSettingsHeight)
+  })
+
+  elements.refreshIntervalSlider.addEventListener('input', (event: Event) => {
+    const value = Number((event.target as HTMLInputElement).value)
+    const clamped = clampRefreshMinutes(value)
+    updateRefreshIntervalUI(clamped)
+  })
+
+  elements.refreshIntervalSlider.addEventListener('change', async (event: Event) => {
+    const value = Number((event.target as HTMLInputElement).value)
+    await setRefreshIntervalMinutes(value)
   })
 
   elements.logoutBtn.addEventListener('click', async () => {
     await window.electronAPI.deleteCredentials()
     credentials = { sessionKey: null, organizationId: null }
     elements.settingsOverlay.style.display = 'none'
+    isSettingsOpen = false
     showLoginRequired()
+    window.electronAPI.resizeWindow(WIDGET_HEIGHT_COLLAPSED)
   })
 
   elements.clearHistoryBtn.addEventListener('click', async () => {
@@ -493,7 +553,10 @@ function resizeWidget(): void {
     height += 12 + extraCount * WIDGET_ROW_HEIGHT
   }
 
-  window.electronAPI.resizeWindow(height)
+  lastNonSettingsHeight = height
+  if (!isSettingsOpen) {
+    window.electronAPI.resizeWindow(height)
+  }
 }
 
 function updateUI(data: UsageData): void {
@@ -720,7 +783,7 @@ function startAutoUpdate(): void {
   stopAutoUpdate()
   updateInterval = setInterval(() => {
     fetchUsageData()
-  }, UPDATE_INTERVAL)
+  }, refreshIntervalMinutes * 60 * 1000)
 }
 
 function stopAutoUpdate(): void {

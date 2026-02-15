@@ -179,12 +179,22 @@
 
             <!-- Settings Overlay -->
             <div class="settings-overlay" id="settingsOverlay" style="display: none;">
-                <div class="settings-content">
+                <div class="settings-content" id="settingsContent">
                     <button class="icon-close-settings-btn" id="closeSettingsBtn" title="Close">×</button>
                     <p class="disclaimer">
                         <strong>Disclaimer:</strong> Unofficial tool not affiliated with Anthropic. Use at your own
                         discretion.
                     </p>
+
+                    <div class="settings-section">
+                        <div class="settings-label-row">
+                            <span class="settings-label">Auto-refresh</span>
+                            <span class="settings-value" id="refreshIntervalValue">5 min</span>
+                        </div>
+                        <input class="settings-slider" id="refreshIntervalSlider" type="range" min="1" max="20"
+                            step="1" value="5" />
+                        <div class="settings-hint">1–20 minutes</div>
+                    </div>
 
                     <div class="settings-actions">
                         <button class="coffee-btn" id="coffeeBtn">

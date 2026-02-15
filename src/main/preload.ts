@@ -41,6 +41,10 @@ const api = {
     ipcRenderer.invoke('save-usage-history-entry', entry),
   clearUsageHistory: () => ipcRenderer.invoke('clear-usage-history'),
 
+  // Settings
+  getRefreshIntervalMinutes: () => ipcRenderer.invoke('get-refresh-interval'),
+  setRefreshIntervalMinutes: (minutes: number) => ipcRenderer.invoke('set-refresh-interval', minutes),
+
   // Platform info
   getPlatform: () => ipcRenderer.invoke('get-platform'),
   platform: process.platform,
