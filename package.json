@@ -39,8 +39,8 @@
     "@types/node": "^25.2.3",
     "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.1",
+    "electron": "^40.4.1",
+    "electron-builder": "^26.7.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "wait-on": "^9.0.4"
@@ -49,10 +49,10 @@
     "electron-store": "^8.1.0"
   },
   "optionalDependencies": {
-    "@rollup/rollup-linux-x64-gnu": "^4.0.0",
-    "@rollup/rollup-win32-x64-msvc": "^4.0.0",
     "@rollup/rollup-darwin-arm64": "^4.0.0",
-    "@rollup/rollup-darwin-x64": "^4.0.0"
+    "@rollup/rollup-darwin-x64": "^4.0.0",
+    "@rollup/rollup-linux-x64-gnu": "^4.0.0",
+    "@rollup/rollup-win32-x64-msvc": "^4.0.0"
   },
   "build": {
     "appId": "com.claudeusage.widget",
