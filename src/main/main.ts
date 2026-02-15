@@ -606,7 +606,7 @@ app.whenReady().then(async () => {
   createTray()
 
   // On macOS, hide the dock icon since this is a menu bar widget
-  if (isMac) {
+  if (isMac && app.dock) {
     app.dock.hide()
   }
 })
