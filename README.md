@@ -9,7 +9,7 @@ A beautiful, standalone Windows/Mac desktop widget that displays your Claude.ai 
 - 🎯 **Real-time Usage Tracking** - Monitor both session and weekly usage limits
 - 📊 **Visual Progress Bars** - Clean, gradient progress indicators
 - ⏱️ **Countdown Timers** - Circular timers showing time until reset
-- 🔄 **Auto-refresh** - Updates every 5 minutes automatically
+- 🔄 **Auto-refresh** - Updates every 5 minutes by default (changeable in Settings)
 - 🎨 **Modern UI** - Sleek, draggable widget with dark theme
 - 🔒 **Secure** - Encrypted credential storage
 - 📍 **Always on Top** - Stays visible across all workspaces
@@ -109,11 +109,8 @@ Right-click the tray icon for:
 
 ### Custom Refresh Interval
 
-Edit `src/renderer/app.js`:
-
-```javascript
-const UPDATE_INTERVAL = 5 * 60 * 1000; // Change to your preference (in milliseconds)
-```
+The default interval is controlled by `DEFAULT_REFRESH_MINUTES` in `src/renderer/app.ts` (5 minutes). Users can
+override it in the app via **Settings → Auto-refresh** with the slider (1–20 minutes).
 
 ## Troubleshooting
 
