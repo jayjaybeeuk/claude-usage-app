@@ -1,0 +1,42 @@
+name: Build macOS (DMG + ZIP)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.12"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron app (DMG + ZIP)
+        run: npm run package:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-App-DMG
+          path: dist/*.dmg
+          if-no-files-found: error
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-App-macOS-ZIP
+          path: dist/*.zip
+          if-no-files-found: error
