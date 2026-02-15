@@ -89,5 +89,7 @@ export interface ElectronAPI {
   saveUsageHistoryEntry: (entry: UsageHistoryEntry) => Promise<boolean>
   clearUsageHistory: () => Promise<boolean>
   getPlatform: () => Promise<string>
+  getRefreshIntervalMinutes: () => Promise<number>
+  setRefreshIntervalMinutes: (minutes: number) => Promise<number>
   platform: string
 }

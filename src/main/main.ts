@@ -13,6 +13,7 @@ import path from 'path'
 import Store from 'electron-store'
 import { fetchViaWindow } from './fetch-via-window'
 import { IpcChannels } from '../shared/ipc-channels'
+import { DEFAULT_REFRESH_MINUTES, MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES } from '../shared/refresh-interval'
 import type {
   Credentials,
   SaveCredentialsPayload,
@@ -32,6 +33,7 @@ interface StoreSchema {
   organizationId: string
   windowPosition: { x: number; y: number }
   usageHistory: UsageHistoryEntry[]
+  refreshIntervalMinutes: number
 }
 
 const store = new Store<StoreSchema>({
@@ -98,6 +100,11 @@ function getTrayIcon(): Electron.NativeImage | string {
     return resized
   }
   return path.join(APP_ROOT, 'assets/tray-icon.png')
+}
+
+function clampRefreshMinutes(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_REFRESH_MINUTES
+  return Math.min(MAX_REFRESH_MINUTES, Math.max(MIN_REFRESH_MINUTES, Math.round(value)))
 }
 
 function createMainWindow(): void {
@@ -410,6 +417,17 @@ ipcMain.handle(IpcChannels.GET_USAGE_HISTORY, () => {
 ipcMain.handle(IpcChannels.CLEAR_USAGE_HISTORY, () => {
   store.set('usageHistory', [])
   return true
+})
+
+ipcMain.handle(IpcChannels.GET_REFRESH_INTERVAL, () => {
+  const saved = store.get('refreshIntervalMinutes', DEFAULT_REFRESH_MINUTES)
+  return clampRefreshMinutes(saved)
+})
+
+ipcMain.handle(IpcChannels.SET_REFRESH_INTERVAL, (_event: Electron.IpcMainInvokeEvent, minutes: number) => {
+  const clamped = clampRefreshMinutes(minutes)
+  store.set('refreshIntervalMinutes', clamped)
+  return clamped
 })
 
 ipcMain.handle(

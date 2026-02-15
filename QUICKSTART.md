@@ -79,11 +79,8 @@ Check the console for:
 
 ### Change Update Frequency
 
-Edit `src/renderer/app.js`:
-
-```javascript
-const UPDATE_INTERVAL = 1 * 60 * 1000; // 1 minute for testing
-```
+The default is controlled by `DEFAULT_REFRESH_MINUTES` in `src/renderer/app.ts` (5 minutes). Users can change it
+in-app via **Settings → Auto-refresh** with the slider (1–20 minutes).
 
 ### Mock API Response
 

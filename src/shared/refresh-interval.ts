@@ -1,0 +1,3 @@
+export const MIN_REFRESH_MINUTES = 1
+export const MAX_REFRESH_MINUTES = 20
+export const DEFAULT_REFRESH_MINUTES = 5
