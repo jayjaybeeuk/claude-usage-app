@@ -19,7 +19,7 @@ A beautiful, standalone Windows/Mac desktop widget that displays your Claude.ai 
 
 ### Download Pre-built Release
 
-1. Download the latest `Claude-Usage-Widget-Setup.exe` from [Releases](https://github.com/SlavomirDurej/claude-usage-widget/releases)
+1. Download the latest `Claude-Usage-App-Setup.exe` from [Releases](https://github.com/jayjaybeeuk/claude-usage-app/releases)
 2. Run the installer
 3. Launch "Claude Usage Widget" from Start Menu
 
@@ -27,15 +27,15 @@ A beautiful, standalone Windows/Mac desktop widget that displays your Claude.ai 
 
 **Prerequisites:**
 
-- Node.js 18+ ([Download](https://nodejs.org))
+- Node.js 22.12+ ([Download](https://nodejs.org))
 - npm (comes with Node.js)
 
 **Steps:**
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/claude-usage-widget.git
-cd claude-usage-widget
+git clone https://github.com/jayjaybeeuk/claude-usage-app.git
+cd claude-usage-app
 
 # Install dependencies
 npm install
@@ -169,10 +169,10 @@ npm install
 
 The `sessionKey` (a bearer token for Claude.ai) is stored in two places:
 
-| Location | Purpose | Cleared on logout? |
-|---|---|---|
-| `%APPDATA%/claude-usage-widget/config.json` (encrypted via `electron-store`) | Persists credentials between app restarts | Yes |
-| Electron in-memory session cookie (`.claude.ai` domain, `secure`, `httpOnly`) | Used by hidden BrowserWindow for API requests | Yes |
+| Location                                                                      | Purpose                                       | Cleared on logout? |
+| ----------------------------------------------------------------------------- | --------------------------------------------- | ------------------ |
+| `%APPDATA%/claude-usage-app/config.json` (encrypted via `electron-store`)     | Persists credentials between app restarts     | Yes                |
+| Electron in-memory session cookie (`.claude.ai` domain, `secure`, `httpOnly`) | Used by hidden BrowserWindow for API requests | Yes                |
 
 The encryption key is embedded in the application. This protects against casual file inspection but not against a determined attacker with access to the source code. For shared machines, always log out when finished.
 
@@ -194,12 +194,13 @@ https://claude.ai/api/organizations/{org_id}/usage
 **Storage Location:**
 
 ```
-%APPDATA%/claude-usage-widget/config.json (encrypted)
+%APPDATA%/claude-usage-app/config.json (encrypted)
 ```
 
 **Debug Mode:**
 
 To enable verbose logging, run with the `--debug` flag or set the `DEBUG_LOG=1` environment variable:
+
 ```bash
 # Via flag
 electron . --debug

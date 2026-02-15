@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       bump-override:
-        description: 'Force a specific version bump (leave empty for auto-detection from commits)'
+        description: "Force a specific version bump (leave empty for auto-detection from commits)"
         required: false
         type: choice
         options:
-          - ''
+          - ""
           - patch
           - minor
           - major
@@ -216,7 +216,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.12'
+          node-version: "22.12"
 
       - name: Install dependencies
         run: npm ci
@@ -229,14 +229,14 @@ jobs:
       - name: Upload Setup installer
         uses: actions/upload-artifact@v4
         with:
-          name: Claude-Usage-Widget-Setup
+          name: Claude-Usage-App-Setup
           path: dist/*Setup*.exe
           if-no-files-found: error
 
       - name: Upload Portable executable
         uses: actions/upload-artifact@v4
         with:
-          name: Claude-Usage-Widget-Portable
+          name: Claude-Usage-App-Portable
           path: dist/*portable*.exe
           if-no-files-found: error
 
@@ -253,7 +253,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.12'
+          node-version: "22.12"
 
       - name: Install dependencies
         run: npm ci
@@ -267,14 +267,14 @@ jobs:
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
-          name: Claude-Usage-Widget-DMG
+          name: Claude-Usage-App-DMG
           path: dist/*.dmg
           if-no-files-found: error
 
       - name: Upload ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: Claude-Usage-Widget-macOS-ZIP
+          name: Claude-Usage-App-macOS-ZIP
           path: dist/*.zip
           if-no-files-found: error
 
@@ -291,7 +291,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.12'
+          node-version: "22.12"
 
       - name: Install dependencies
         run: npm ci
@@ -304,7 +304,7 @@ jobs:
       - name: Upload AppImage
         uses: actions/upload-artifact@v4
         with:
-          name: Claude-Usage-Widget-AppImage
+          name: Claude-Usage-App-AppImage
           path: dist/*.AppImage
           if-no-files-found: error
 
@@ -333,10 +333,10 @@ jobs:
             ---
             **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ needs.version.outputs.new_tag }}
           files: |
-            artifacts/Claude-Usage-Widget-Setup/*
-            artifacts/Claude-Usage-Widget-Portable/*
-            artifacts/Claude-Usage-Widget-DMG/*
-            artifacts/Claude-Usage-Widget-macOS-ZIP/*
-            artifacts/Claude-Usage-Widget-AppImage/*
+            artifacts/Claude-Usage-App-Setup/*
+            artifacts/Claude-Usage-App-Portable/*
+            artifacts/Claude-Usage-App-DMG/*
+            artifacts/Claude-Usage-App-macOS-ZIP/*
+            artifacts/Claude-Usage-App-AppImage/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

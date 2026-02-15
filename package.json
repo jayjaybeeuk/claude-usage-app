@@ -1,6 +1,6 @@
 {
-  "name": "claude-usage-widget",
-  "version": "1.4.0",
+  "name": "claude-usage-app",
+  "version": "1.0.0",
   "description": "Desktop widget for Claude.ai usage monitoring",
   "main": "dist-main/main/main.js",
   "scripts": {
@@ -29,7 +29,7 @@
     "widget",
     "electron"
   ],
-  "author": "Slavomir Durej",
+  "author": "James Bolton",
   "license": "MIT",
   "engines": {
     "node": ">=22.12.0",

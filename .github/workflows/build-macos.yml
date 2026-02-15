@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.12'
+          node-version: "22.12"
 
       - name: Install dependencies
         run: npm ci
@@ -30,13 +30,13 @@ jobs:
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
-          name: Claude-Usage-Widget-DMG
+          name: Claude-Usage-App-DMG
           path: dist/*.dmg
           if-no-files-found: error
 
       - name: Upload ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: Claude-Usage-Widget-macOS-ZIP
+          name: Claude-Usage-App-macOS-ZIP
           path: dist/*.zip
           if-no-files-found: error

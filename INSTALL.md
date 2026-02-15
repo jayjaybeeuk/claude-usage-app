@@ -4,7 +4,7 @@
 
 ### Option 1: Download Installer (Recommended)
 
-1. Download `Claude-Usage-Widget-Setup.exe` from releases
+1. Download `Claude-Usage-App-Setup.exe` from releases
 2. Run the installer
 3. Launch from Start Menu
 4. Login when prompted
@@ -15,7 +15,7 @@
 # Install Node.js from https://nodejs.org (if not already installed)
 
 # Clone or download this project
-cd claude-usage-widget
+cd claude-usage-app
 
 # Install dependencies
 npm install
@@ -44,8 +44,8 @@ npm run build:win
 
 ## What Gets Installed
 
-- Executable: `%LOCALAPPDATA%\Programs\claude-usage-widget\`
-- Settings: `%APPDATA%\claude-usage-widget\` (encrypted)
+- Executable: `%LOCALAPPDATA%\Programs\claude-usage-app\`
+- Settings: `%APPDATA%\claude-usage-app\` (encrypted)
 - Start Menu shortcut
 - Desktop shortcut (optional)
 
@@ -59,8 +59,8 @@ npm run build:win
 **Manual cleanup:**
 
 ```
-%APPDATA%\claude-usage-widget\
-%LOCALAPPDATA%\Programs\claude-usage-widget\
+%APPDATA%\claude-usage-app\
+%LOCALAPPDATA%\Programs\claude-usage-app\
 ```
 
 ## Troubleshooting Install Issues
