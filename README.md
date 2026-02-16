@@ -1,8 +1,8 @@
-# Claude Usage Widget
+# Claude Usage App
 
-A beautiful, standalone Windows/Mac desktop widget that displays your Claude.ai usage statistics in real-time.
+A beautiful, standalone Windows, Mac and Linux desktop app that displays your Claude.ai usage statistics in real-time.
 
-![Claude Usage Widget](assets/claude-usage-screenshot.jpg)
+![Claude Usage App](assets/claude-usage-screenshot.jpg)
 
 ## Features
 
@@ -208,13 +208,13 @@ DEBUG_LOG=1 npm start
 
 ## Roadmap
 
-- [ ] macOS support
-- [ ] Linux support
+- [x] macOS support
+- [x] Linux support
 - [ ] Custom themes
 - [ ] Notification alerts at usage thresholds
 - [x] Remember window position
-- [ ] Settings panel
-- [ ] Usage history graphs
+- [x] Settings panel
+- [x] Usage history graphs
 - [ ] Multiple account support
 - [ ] Keyboard shortcuts
 
