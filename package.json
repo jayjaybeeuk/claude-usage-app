@@ -21,7 +21,8 @@
     "package:win": "npm run build && electron-builder --win",
     "package:mac": "npm run build && electron-builder --mac",
     "package:linux": "npm run build && electron-builder --linux",
-    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit"
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "generate-icons": "bash scripts/generate-icons.sh"
   },
   "keywords": [
     "claude",
@@ -56,7 +57,7 @@
   },
   "build": {
     "appId": "com.claudeusage.widget",
-    "productName": "Claude Usage Widget",
+    "productName": "Claude Usage App",
     "directories": {
       "output": "dist"
     },

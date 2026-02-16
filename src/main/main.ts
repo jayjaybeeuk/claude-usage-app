@@ -72,7 +72,10 @@ function getAppIcon(): string {
   if (isWindows) {
     return path.join(APP_ROOT, 'assets/icon.ico')
   }
-  return path.join(APP_ROOT, 'assets/icon.icns')
+  if (isMac) {
+    return path.join(APP_ROOT, 'assets/icon.icns')
+  }
+  return path.join(APP_ROOT, 'assets/icon.png')
 }
 
 // Set sessionKey as a cookie in Electron's session
