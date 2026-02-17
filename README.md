@@ -2,7 +2,7 @@
 
 A beautiful, standalone Windows, Mac and Linux desktop app that displays your Claude.ai usage statistics in real-time.
 
-![Claude Usage App](assets/claude-usage-screenshot.jpg)
+![Claude Usage App](assets/claude-usage-screenshot.png)
 
 ## Features
 
@@ -217,6 +217,7 @@ DEBUG_LOG=1 npm start
 - [x] Usage history graphs
 - [ ] Multiple account support
 - [ ] Keyboard shortcuts
+- [ ] Migrate from Electron to Tauri for smaller binary size (~10MB vs ~200MB)
 
 ## Contributing
 

@@ -61,20 +61,18 @@
     "directories": {
       "output": "dist"
     },
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": ["en-US"],
     "files": [
       "dist-main/**/*",
       "dist-renderer/**/*",
-      "assets/**/*",
-      "package.json",
-      "!src",
-      "!**/*.ts",
-      "!**/*.map",
-      "!tsconfig*.json",
-      "!vite.config.ts",
-      "!*.md",
-      "!.github",
-      "!.claude",
-      "!.gitignore"
+      "assets/icon.icns",
+      "assets/icon.ico",
+      "assets/icon.png",
+      "assets/tray-icon.png",
+      "assets/claude-logo.svg",
+      "package.json"
     ],
     "extraMetadata": {
       "main": "dist-main/main/main.js"
