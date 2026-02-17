@@ -1,6 +1,6 @@
 {
   "name": "claude-usage-app",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Desktop widget for Claude.ai usage monitoring",
   "main": "dist-main/main/main.js",
   "scripts": {
@@ -63,7 +63,9 @@
     },
     "asar": true,
     "compression": "maximum",
-    "electronLanguages": ["en-US"],
+    "electronLanguages": [
+      "en-US"
+    ],
     "files": [
       "dist-main/**/*",
       "dist-renderer/**/*",
