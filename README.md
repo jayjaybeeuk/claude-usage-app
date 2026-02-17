@@ -217,6 +217,7 @@ DEBUG_LOG=1 npm start
 - [x] Usage history graphs
 - [ ] Multiple account support
 - [ ] Keyboard shortcuts
+- [ ] Migrate from Electron to Tauri for smaller binary size (~10MB vs ~200MB)
 
 ## Contributing
 
