@@ -47,7 +47,7 @@ export function fetchViaWindow(url: string, { timeoutMs = 30000 }: FetchViaWindo
     })
 
     const timeout = setTimeout(() => {
-      win.close()
+      win.destroy()
       reject(new Error('Request timeout'))
     }, timeoutMs)
 
@@ -57,7 +57,7 @@ export function fetchViaWindow(url: string, { timeoutMs = 30000 }: FetchViaWindo
           'document.body.innerText || document.body.textContent'
         )
         clearTimeout(timeout)
-        win.close()
+        win.destroy()
 
         // Detect known block/failure signatures before attempting JSON parse.
         // This provides explicit errors when Claude.ai modifies their API or CSP.
@@ -76,14 +76,14 @@ export function fetchViaWindow(url: string, { timeoutMs = 30000 }: FetchViaWindo
         }
       } catch (err) {
         clearTimeout(timeout)
-        win.close()
+        win.destroy()
         reject(err)
       }
     })
 
     win.webContents.on('did-fail-load', (_event: Electron.Event, errorCode: number, errorDescription: string) => {
       clearTimeout(timeout)
-      win.close()
+      win.destroy()
       reject(new Error(`LoadFailed: ${errorCode} ${errorDescription}`))
     })
 
