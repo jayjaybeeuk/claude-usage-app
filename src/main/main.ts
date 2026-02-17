@@ -52,6 +52,7 @@ function debugLog(...args: unknown[]): void {
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
+let isQuitting = false
 
 const WIDGET_WIDTH = 480
 const STATUS_BAR_HEIGHT = 34
@@ -161,6 +162,14 @@ function createMainWindow(): void {
     store.set('windowPosition', { x: position.x, y: position.y })
   })
 
+  // On close button, hide to tray instead of quitting (unless app is exiting)
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -240,6 +249,11 @@ function buildTrayMenu(): Electron.Menu {
     {
       label: 'Exit',
       click: () => {
+        isQuitting = true
+        if (tray) {
+          tray.destroy()
+          tray = null
+        }
         app.quit()
       },
     },
@@ -369,12 +383,8 @@ ipcMain.on(IpcChannels.MINIMIZE_WINDOW, () => {
 })
 
 ipcMain.on(IpcChannels.CLOSE_WINDOW, () => {
-  if (isMac) {
-    // On macOS, closing the widget hides it (app stays in menu bar)
-    if (mainWindow) mainWindow.hide()
-  } else {
-    app.quit()
-  }
+  // Hide to tray on all platforms (X button = minimize to tray)
+  if (mainWindow) mainWindow.hide()
 })
 
 ipcMain.handle(IpcChannels.GET_PLATFORM, () => {
@@ -632,12 +642,14 @@ app.whenReady().then(async () => {
   }
 })
 
+// Set isQuitting so the mainWindow 'close' handler allows destruction
+app.on('before-quit', () => {
+  isQuitting = true
+})
+
 app.on('window-all-closed', () => {
-  // On macOS, apps typically stay running even with no windows
-  // On all platforms, keep running in tray
-  if (!isMac) {
-    // Keep running in tray on Windows/Linux too
-  }
+  // On macOS, keep running (menu bar widget stays alive)
+  // On Windows/Linux, this fires after quit destroys windows — no action needed
 })
 
 app.on('activate', () => {
@@ -656,6 +668,7 @@ if (!gotTheLock) {
 } else {
   app.on('second-instance', () => {
     if (mainWindow) {
+      if (!mainWindow.isVisible()) mainWindow.show()
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.focus()
     }
