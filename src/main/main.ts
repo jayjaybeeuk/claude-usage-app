@@ -49,6 +49,11 @@ const DEBUG = process.env.DEBUG_LOG === '1' || process.argv.includes('--debug')
 function debugLog(...args: unknown[]): void {
   if (DEBUG) console.log('[Debug]', ...args)
 }
+function debugLogToRenderer(label: string, data: unknown): void {
+  if (!DEBUG) return
+  console.log('[Debug]', label, JSON.stringify(data, null, 2))
+  mainWindow?.webContents.send(IpcChannels.DEBUG_LOG, label, data)
+}
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -555,10 +560,12 @@ ipcMain.handle(IpcChannels.FETCH_USAGE_DATA, async () => {
   }
 
   const data = usageResult.value as UsageData
+  debugLogToRenderer('Raw usage API response:', data)
 
   // Merge overage spending data into data.extra_usage
   if (overageResult.status === 'fulfilled' && overageResult.value) {
     const overage = overageResult.value as Record<string, unknown>
+    debugLogToRenderer('Raw overage API response:', overage)
     const limit = (overage.monthly_credit_limit ?? overage.spend_limit_amount_cents) as number | undefined
     const used = (overage.used_credits ?? overage.balance_cents) as number | undefined
     const enabled =
@@ -579,6 +586,7 @@ ipcMain.handle(IpcChannels.FETCH_USAGE_DATA, async () => {
   // Merge prepaid balance into data.extra_usage
   if (prepaidResult.status === 'fulfilled' && prepaidResult.value) {
     const prepaid = prepaidResult.value as Record<string, unknown>
+    debugLogToRenderer('Raw prepaid API response:', prepaid)
     if (typeof prepaid.amount === 'number') {
       if (!data.extra_usage) data.extra_usage = {}
       data.extra_usage.balance_cents = prepaid.amount
