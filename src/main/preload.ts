@@ -28,6 +28,9 @@ const api = {
   onSessionExpired: (callback: () => void) => {
     ipcRenderer.on('session-expired', () => callback())
   },
+  onDebugLog: (callback: (label: string, data: unknown) => void) => {
+    ipcRenderer.on('debug-log', (_event, label, data) => callback(label, data))
+  },
 
   // API
   fetchUsageData: () => ipcRenderer.invoke('fetch-usage-data'),
@@ -37,7 +40,15 @@ const api = {
 
   // Usage history
   getUsageHistory: () => ipcRenderer.invoke('get-usage-history'),
-  saveUsageHistoryEntry: (entry: { timestamp: number; session: number; weekly: number; sonnet: number }) =>
+  saveUsageHistoryEntry: (entry: {
+    timestamp: number
+    session: number
+    weekly: number
+    sonnet: number
+    opus?: number
+    cowork?: number
+    oauthApps?: number
+  }) =>
     ipcRenderer.invoke('save-usage-history-entry', entry),
   clearUsageHistory: () => ipcRenderer.invoke('clear-usage-history'),
 

@@ -151,16 +151,30 @@
                 <!-- Status Bar -->
                 <div class="status-bar" id="statusBar">
                     <span class="status-text" id="statusText">Refreshed just now</span>
-                    <button class="graph-toggle-btn" id="graphToggleBtn" title="Toggle usage graph">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                        </svg>
-                    </button>
+                    <div class="status-actions">
+                        <button class="graph-toggle-btn" id="graphToggleBtn" title="Toggle usage graph">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                            </svg>
+                        </button>
+                        <button class="pie-toggle-btn" id="pieToggleBtn" title="Toggle model breakdown">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2a10 10 0 0 1 10 10H12V2z" />
+                                <path d="M12 12L4.93 19.07A10 10 0 0 1 12 2v10z" />
+                                <circle cx="12" cy="12" r="10" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Usage History Graph -->
                 <div class="graph-section" id="graphSection" style="display: none;">
                     <canvas id="usageChart" width="440" height="140"></canvas>
+                </div>
+
+                <!-- Model Breakdown Pie Chart -->
+                <div class="pie-section" id="pieSection" style="display: none;">
+                    <canvas id="pieChart" width="440" height="140"></canvas>
                 </div>
 
                 <!-- Expand Toggle -->

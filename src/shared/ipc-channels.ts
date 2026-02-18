@@ -25,4 +25,5 @@ export const IpcChannels = {
   // on (main -> renderer)
   REFRESH_USAGE: 'refresh-usage',
   SESSION_EXPIRED: 'session-expired',
+  DEBUG_LOG: 'debug-log',
 } as const

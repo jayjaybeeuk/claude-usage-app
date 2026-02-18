@@ -43,6 +43,9 @@ export interface UsageHistoryEntry {
   session: number
   weekly: number
   sonnet: number
+  opus?: number
+  cowork?: number
+  oauthApps?: number
 }
 
 export interface UsageTimePeriod {
@@ -82,6 +85,7 @@ export interface ElectronAPI {
   setWindowPosition: (position: WindowPosition) => Promise<boolean>
   onRefreshUsage: (callback: () => void) => void
   onSessionExpired: (callback: () => void) => void
+  onDebugLog: (callback: (label: string, data: unknown) => void) => void
   fetchUsageData: () => Promise<UsageData>
   openExternal: (url: string) => void
   updateTrayUsage: (stats: TrayUsageStats) => void
