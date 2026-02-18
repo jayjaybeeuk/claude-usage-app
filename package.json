@@ -63,11 +63,15 @@
     },
     "asar": true,
     "compression": "maximum",
+    "removePackageScripts": true,
+    "nodeGypRebuild": false,
+    "npmRebuild": false,
     "electronLanguages": [
       "en-US"
     ],
     "files": [
       "dist-main/**/*",
+      "!dist-main/**/*.map",
       "dist-renderer/**/*",
       "assets/icon.icns",
       "assets/icon.ico",
@@ -92,7 +96,8 @@
         "zip"
       ],
       "icon": "assets/icon.icns",
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "minimumSystemVersion": "12.0"
     },
     "dmg": {
       "contents": [
@@ -112,7 +117,8 @@
       "target": [
         "AppImage"
       ],
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "category": "Utility"
     },
     "portable": {
       "artifactName": "${productName}-${version}-portable.${ext}"
