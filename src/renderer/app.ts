@@ -298,6 +298,11 @@ function setupEventListeners(): void {
     credentials = { sessionKey: null, organizationId: null }
     showLoginRequired()
   })
+
+  // Forward debug logs from main process to renderer DevTools console
+  window.electronAPI.onDebugLog((label: string, data: unknown) => {
+    console.log('[Debug]', label, data)
+  })
 }
 
 // Handle manual sessionKey connect
