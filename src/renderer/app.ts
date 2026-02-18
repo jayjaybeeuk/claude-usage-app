@@ -9,6 +9,7 @@ let countdownInterval: ReturnType<typeof setInterval> | null = null
 let latestUsageData: UsageData | null = null
 let isExpanded = false
 let isGraphVisible = false
+let isPieVisible = false
 let lastRefreshTime: number | null = null
 let statusInterval: ReturnType<typeof setInterval> | null = null
 let refreshIntervalMinutes = DEFAULT_REFRESH_MINUTES
@@ -16,6 +17,7 @@ let isSettingsOpen = false
 const WIDGET_HEIGHT_COLLAPSED = 164 // 140 base + 24 status bar
 const WIDGET_ROW_HEIGHT = 30
 const GRAPH_HEIGHT = 170 // graph section height including padding
+const PIE_HEIGHT = 162 // pie section height including padding — must match .pie-section CSS height
 const SONNET_ROW_HEIGHT = 30 // sonnet row height
 let lastNonSettingsHeight = WIDGET_HEIGHT_COLLAPSED
 
@@ -74,6 +76,10 @@ const elements = {
   graphToggleBtn: getElement<HTMLButtonElement>('graphToggleBtn'),
   graphSection: getElement<HTMLDivElement>('graphSection'),
   usageChart: getElement<HTMLCanvasElement>('usageChart'),
+
+  pieToggleBtn: getElement<HTMLButtonElement>('pieToggleBtn'),
+  pieSection: getElement<HTMLDivElement>('pieSection'),
+  pieChart: getElement<HTMLCanvasElement>('pieChart'),
 
   expandToggle: getElement<HTMLDivElement>('expandToggle'),
   expandArrow: getElement<SVGElement>('expandArrow'),
@@ -206,6 +212,17 @@ function setupEventListeners(): void {
     elements.graphToggleBtn.classList.toggle('active', isGraphVisible)
     if (isGraphVisible) {
       renderUsageChart()
+    }
+    resizeWidget()
+  })
+
+  // Pie chart toggle
+  elements.pieToggleBtn.addEventListener('click', () => {
+    isPieVisible = !isPieVisible
+    elements.pieSection.style.display = isPieVisible ? 'block' : 'none'
+    elements.pieToggleBtn.classList.toggle('active', isPieVisible)
+    if (isPieVisible) {
+      renderPieChart()
     }
     resizeWidget()
   })
@@ -381,6 +398,9 @@ async function fetchUsageData(): Promise<void> {
       session: data.five_hour?.utilization || 0,
       weekly: data.seven_day?.utilization || 0,
       sonnet: data.seven_day_sonnet?.utilization || 0,
+      opus: data.seven_day_opus?.utilization,
+      cowork: data.seven_day_cowork?.utilization,
+      oauthApps: data.seven_day_oauth_apps?.utilization,
     }
     await window.electronAPI.saveUsageHistoryEntry(historyEntry)
 
@@ -394,6 +414,11 @@ async function fetchUsageData(): Promise<void> {
     // Refresh graph if visible
     if (isGraphVisible) {
       renderUsageChart()
+    }
+
+    // Refresh pie chart if visible
+    if (isPieVisible) {
+      renderPieChart()
     }
   } catch (error) {
     console.error('Error fetching usage data:', error)
@@ -545,6 +570,11 @@ function resizeWidget(): void {
   // Add graph if visible
   if (isGraphVisible) {
     height += GRAPH_HEIGHT
+  }
+
+  // Add pie chart if visible
+  if (isPieVisible) {
+    height += PIE_HEIGHT
   }
 
   // Add expanded extra rows
@@ -842,6 +872,11 @@ async function renderUsageChart(): Promise<void> {
     })
     const sessionData = sortedKeys.map((k) => hourlyData[k].session)
     const weeklyData = sortedKeys.map((k) => hourlyData[k].weekly)
+    const sonnetData = sortedKeys.map((k) => hourlyData[k].sonnet || 0)
+    const opusData = sortedKeys.map((k) => hourlyData[k].opus || 0)
+    const coworkData = sortedKeys.map((k) => hourlyData[k].cowork || 0)
+    const hasOpus = opusData.some((v) => v > 0)
+    const hasCowork = coworkData.some((v) => v > 0)
 
     const canvas = elements.usageChart
     const dpr = window.devicePixelRatio || 1
@@ -928,28 +963,217 @@ async function renderUsageChart(): Promise<void> {
 
     drawLine(sessionData, '#8b5cf6', 'rgba(139, 92, 246, 0.1)')
     drawLine(weeklyData, '#3b82f6', 'rgba(59, 130, 246, 0.08)')
+    drawLine(sonnetData, '#8b5cf6', 'rgba(139, 92, 246, 0.06)')
+    if (hasOpus) drawLine(opusData, '#f59e0b', 'rgba(245, 158, 11, 0.06)')
+    if (hasCowork) drawLine(coworkData, '#10b981', 'rgba(16, 185, 129, 0.06)')
 
-    // Legend
+    // Legend — dynamic based on available series
+    interface LegendItem {
+      label: string
+      color: string
+    }
+    const legendItems: LegendItem[] = [
+      { label: 'Session', color: '#8b5cf6' },
+      { label: 'Weekly', color: '#3b82f6' },
+      { label: 'Sonnet', color: '#8b5cf6' },
+    ]
+    if (hasOpus) legendItems.push({ label: 'Opus', color: '#f59e0b' })
+    if (hasCowork) legendItems.push({ label: 'Cowork', color: '#10b981' })
+
     const legendY = 6
     ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-
-    // Session legend
-    ctx.fillStyle = '#8b5cf6'
-    ctx.fillRect(padLeft, legendY - 3, 10, 6)
-    ctx.fillStyle = '#a0a0a0'
-    ctx.fillText('Session', padLeft + 14, legendY)
-
-    // Weekly legend
-    const weeklyLegendX = padLeft + 60
-    ctx.fillStyle = '#3b82f6'
-    ctx.fillRect(weeklyLegendX, legendY - 3, 10, 6)
-    ctx.fillStyle = '#a0a0a0'
-    ctx.fillText('Weekly', weeklyLegendX + 14, legendY)
+    let legendX = padLeft
+    for (const item of legendItems) {
+      ctx.fillStyle = item.color
+      ctx.fillRect(legendX, legendY - 3, 10, 6)
+      ctx.fillStyle = '#a0a0a0'
+      ctx.fillText(item.label, legendX + 14, legendY)
+      legendX += 54
+    }
   } catch (error) {
     debugLog('Chart rendering failed:', error)
   }
+}
+
+// Two-ring donut chart:
+//   Outer ring = weekly model proportional split (Sonnet, Opus, etc.)
+//              = dim placeholder when no per-model data available
+//   Inner ring = session utilisation arc (used vs remaining)
+//   Centre     = session % label
+function renderPieChart(): void {
+  if (!latestUsageData) return
+
+  const canvas = elements.pieChart
+  const dpr = window.devicePixelRatio || 1
+  const rect = canvas.parentElement!.getBoundingClientRect()
+  canvas.width = rect.width * dpr
+  canvas.height = (rect.height - 16) * dpr
+  canvas.style.width = rect.width + 'px'
+  canvas.style.height = rect.height - 16 + 'px'
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.scale(dpr, dpr)
+
+  const w = rect.width
+  const h = rect.height - 16
+
+  ctx.clearRect(0, 0, w, h)
+
+  interface PieSlice {
+    label: string
+    value: number // 0-100 utilization %
+    color: string
+  }
+
+  // Outer ring: per-model weekly slices, sized by proportional share.
+  // Future model keys (e.g. seven_day_haiku) surface automatically via the index signature.
+  const MODEL_COLORS: Record<string, string> = {
+    seven_day_sonnet:     '#8b5cf6',
+    seven_day_opus:       '#f59e0b',
+    seven_day_cowork:     '#10b981',
+    seven_day_oauth_apps: '#06b6d4',
+  }
+  const MODEL_LABELS: Record<string, string> = {
+    seven_day_sonnet:     'Sonnet',
+    seven_day_opus:       'Opus',
+    seven_day_cowork:     'Cowork',
+    seven_day_oauth_apps: 'OAuth',
+  }
+
+  const outerSlices: PieSlice[] = Object.entries(latestUsageData)
+    .filter(([key, val]) => key.startsWith('seven_day_') && (val as UsageTimePeriod)?.utilization != null)
+    .map(([key, val]) => ({
+      label: MODEL_LABELS[key] ?? key.replace('seven_day_', '').replace(/_/g, ' '),
+      value: (val as UsageTimePeriod).utilization!,
+      color: MODEL_COLORS[key] ?? '#a0a0a0',
+    }))
+    .filter((s) => s.value > 0)
+
+  const sessionPct = latestUsageData.five_hour?.utilization || 0
+  const weeklyPct  = latestUsageData.seven_day?.utilization  || 0
+  const hasModels  = outerSlices.length > 0
+  const hasData    = hasModels || sessionPct > 0 || weeklyPct > 0
+
+  if (!hasData) {
+    ctx.fillStyle = '#505050'
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('No data available', w / 2, h / 2)
+    return
+  }
+
+  // Geometry — donut center shifted left to leave room for right-side legend
+  const legendColW  = 96
+  const maxR        = Math.min((w - legendColW) / 2, h / 2) * 0.88
+  const ringW       = maxR * 0.28          // thickness of each ring
+  const ringGap     = maxR * 0.07          // gap between outer and inner rings
+  const outerOuter  = maxR
+  const outerInner  = maxR - ringW
+  const innerOuter  = outerInner - ringGap
+  const innerInner  = innerOuter - ringW
+  const cx  = (w - legendColW) / 2
+  const cy  = h / 2
+  const TAU = 2 * Math.PI
+  const START     = -Math.PI / 2          // 12 o'clock
+  const OUTER_GAP = hasModels && outerSlices.length > 1 ? 0.025 : 0
+
+  // Helper: filled donut arc segment
+  function drawArc(ro: number, ri: number, a0: number, a1: number, color: string): void {
+    ctx!.beginPath()
+    ctx!.arc(cx, cy, ro, a0, a1)
+    ctx!.arc(cx, cy, ri, a1, a0, true)
+    ctx!.closePath()
+    ctx!.fillStyle = color
+    ctx!.fill()
+  }
+
+  // --- Outer ring: weekly model breakdown ---
+  if (hasModels) {
+    const total = outerSlices.reduce((sum, s) => sum + s.value, 0)
+    let angle = START
+    for (const slice of outerSlices) {
+      const sweep = (slice.value / total) * TAU - OUTER_GAP
+      drawArc(outerOuter, outerInner, angle + OUTER_GAP / 2, angle + sweep + OUTER_GAP / 2, slice.color)
+      angle += (slice.value / total) * TAU
+    }
+  } else {
+    // No per-model data yet — dim placeholder full ring
+    drawArc(outerOuter, outerInner, START, START + TAU, 'rgba(255,255,255,0.06)')
+  }
+
+  // --- Inner ring: session utilisation arc ---
+  const usedAngle = (Math.min(sessionPct, 100) / 100) * TAU
+  // Used portion (purple)
+  if (usedAngle > 0.01) {
+    drawArc(innerOuter, innerInner, START, START + usedAngle, '#8b5cf6')
+  }
+  // Remaining portion (dim)
+  if (usedAngle < TAU - 0.01) {
+    drawArc(innerOuter, innerInner, START + usedAngle, START + TAU, 'rgba(139,92,246,0.14)')
+  }
+
+  // --- Centre label: session % ---
+  const labelSize = Math.max(8, Math.round(innerInner * 0.42))
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = `bold ${labelSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+  ctx.fillStyle = '#c0c0c0'
+  ctx.fillText(`${Math.round(sessionPct)}%`, cx, cy)
+
+  // --- Right-side legend ---
+  const legendX    = cx + outerOuter + 14
+  const itemH      = 16
+  const headerH    = 12
+
+  // Calculate total legend height to vertically centre it
+  const modelRows  = hasModels ? outerSlices.length : 1   // 1 for "No model data" placeholder
+  const totalH     = headerH + modelRows * itemH + 8 + headerH + itemH
+  let ly = cy - totalH / 2
+
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+
+  function legendHeader(text: string): void {
+    ctx!.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
+    ctx!.fillStyle = '#808080'
+    ctx!.fillText(text, legendX, ly + headerH / 2)
+    ly += headerH
+  }
+
+  function legendRow(color: string, label: string, sub: string): void {
+    ctx!.fillStyle = color
+    ctx!.fillRect(legendX, ly + itemH / 2 - 3, 8, 6)
+    ctx!.font = '9px -apple-system, BlinkMacSystemFont, sans-serif'
+    ctx!.fillStyle = '#c0c0c0'
+    ctx!.fillText(label, legendX + 12, ly + itemH / 2 - 3)
+    ctx!.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
+    ctx!.fillStyle = '#606060'
+    ctx!.fillText(sub, legendX + 12, ly + itemH / 2 + 5)
+    ly += itemH
+  }
+
+  // Weekly models section
+  legendHeader('WEEKLY MODELS')
+  if (hasModels) {
+    const total = outerSlices.reduce((sum, s) => sum + s.value, 0)
+    for (const s of outerSlices) {
+      legendRow(s.color, s.label, `${Math.round(s.value)}% · ${Math.round((s.value / total) * 100)}% share`)
+    }
+  } else {
+    ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
+    ctx.fillStyle = '#404040'
+    ctx.fillText('No model data from API', legendX, ly + itemH / 2)
+    ly += itemH
+  }
+
+  // Session section
+  ly += 8
+  legendHeader('SESSION')
+  legendRow('#8b5cf6', `${Math.round(sessionPct)}% used`, `of 5h window`)
 }
 
 // Add spinning animation for refresh button

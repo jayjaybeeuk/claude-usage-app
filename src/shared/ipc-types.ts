@@ -43,6 +43,9 @@ export interface UsageHistoryEntry {
   session: number
   weekly: number
   sonnet: number
+  opus?: number
+  cowork?: number
+  oauthApps?: number
 }
 
 export interface UsageTimePeriod {

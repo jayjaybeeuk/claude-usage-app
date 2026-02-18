@@ -37,7 +37,15 @@ const api = {
 
   // Usage history
   getUsageHistory: () => ipcRenderer.invoke('get-usage-history'),
-  saveUsageHistoryEntry: (entry: { timestamp: number; session: number; weekly: number; sonnet: number }) =>
+  saveUsageHistoryEntry: (entry: {
+    timestamp: number
+    session: number
+    weekly: number
+    sonnet: number
+    opus?: number
+    cowork?: number
+    oauthApps?: number
+  }) =>
     ipcRenderer.invoke('save-usage-history-entry', entry),
   clearUsageHistory: () => ipcRenderer.invoke('clear-usage-history'),
 
