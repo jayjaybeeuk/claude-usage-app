@@ -611,6 +611,26 @@ body.platform-darwin .title-bar {
     stroke: #f59e0b;
 }
 
+.usage-ring-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.06);
+    stroke-width: 2;
+}
+
+.usage-ring {
+    fill: none;
+    stroke-width: 2;
+    transition: stroke-dashoffset 0.6s ease;
+}
+
+.usage-ring.session {
+    stroke: #6d28d9;
+}
+
+.usage-ring.weekly {
+    stroke: #2563eb;
+}
+
 .timer-text {
     color: #e0e0e0;
     font-size: 13px;
