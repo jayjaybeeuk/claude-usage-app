@@ -59,11 +59,13 @@ const elements = {
   sessionProgress: getElement<HTMLDivElement>('sessionProgress'),
   sessionTimer: getElement<SVGCircleElement>('sessionTimer'),
   sessionTimeText: getElement<HTMLDivElement>('sessionTimeText'),
+  sessionUsageRing: getElement<SVGCircleElement>('sessionUsageRing'),
 
   weeklyPercentage: getElement<HTMLSpanElement>('weeklyPercentage'),
   weeklyProgress: getElement<HTMLDivElement>('weeklyProgress'),
   weeklyTimer: getElement<SVGCircleElement>('weeklyTimer'),
   weeklyTimeText: getElement<HTMLDivElement>('weeklyTimeText'),
+  weeklyUsageRing: getElement<SVGCircleElement>('weeklyUsageRing'),
 
   sonnetRow: getElement<HTMLDivElement>('sonnetRow'),
   sonnetPercentage: getElement<HTMLSpanElement>('sonnetPercentage'),
@@ -648,6 +650,7 @@ function refreshTimers(): void {
   }
 
   updateProgressBar(elements.sessionProgress, elements.sessionPercentage, sessionUtilization)
+  updateUsageRing(elements.sessionUsageRing, sessionUtilization)
 
   updateTimer(elements.sessionTimer, elements.sessionTimeText, sessionResetsAt ?? null, 5 * 60) // 5 hours in minutes
 
@@ -670,6 +673,7 @@ function refreshTimers(): void {
   }
 
   updateProgressBar(elements.weeklyProgress, elements.weeklyPercentage, weeklyUtilization)
+  updateUsageRing(elements.weeklyUsageRing, weeklyUtilization)
 
   updateTimer(
     elements.weeklyTimer,
@@ -779,6 +783,14 @@ function updateTimer(
   } else if (elapsedPercentage >= 75) {
     timerElement.classList.add('warning')
   }
+}
+
+// Update inner usage ring (shows percentage utilization)
+function updateUsageRing(ringElement: SVGCircleElement, utilization: number): void {
+  const percentage = Math.min(Math.max(utilization, 0), 100)
+  const circumference = 2 * Math.PI * 6 // r=6, so ~37.7
+  const offset = circumference - (percentage / 100) * circumference
+  ringElement.style.strokeDashoffset = String(offset)
 }
 
 // UI State Management
