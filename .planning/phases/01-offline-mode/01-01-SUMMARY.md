@@ -65,7 +65,7 @@ Each task was committed atomically:
 1. **Task 1: Add GET_CACHED_USAGE channel to ipc-channels.ts** - `834b67b` (feat)
 2. **Task 2: Add CachedUsageData interface and getCachedUsage to ipc-types.ts** - `3bd8e5d` (feat)
 
-**Plan metadata:** _(pending final commit)_
+**Plan metadata:** `ec42eea` (docs: complete plan)
 
 ## Files Created/Modified
 - `src/shared/ipc-channels.ts` - Added GET_CACHED_USAGE channel constant in the invoke section after SET_REFRESH_INTERVAL
@@ -94,6 +94,15 @@ None - no external service configuration required.
 - Shared IPC contract complete; Plans 02 and 03 can proceed in parallel
 - Plan 02 (main process): implement `ipcMain.handle(IpcChannels.GET_CACHED_USAGE, ...)` and cache persistence
 - Plan 03 (renderer): call `window.electronAPI.getCachedUsage()` for offline fallback display
+
+## Self-Check: PASSED
+
+- FOUND: src/shared/ipc-channels.ts
+- FOUND: src/shared/ipc-types.ts
+- FOUND: .planning/phases/01-offline-mode/01-01-SUMMARY.md
+- FOUND commit: 834b67b (feat: GET_CACHED_USAGE channel)
+- FOUND commit: 3bd8e5d (feat: CachedUsageData interface)
+- FOUND commit: ec42eea (docs: plan metadata)
 
 ---
 *Phase: 01-offline-mode*
