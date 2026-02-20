@@ -14,6 +14,8 @@ let lastRefreshTime: number | null = null
 let statusInterval: ReturnType<typeof setInterval> | null = null
 let refreshIntervalMinutes = DEFAULT_REFRESH_MINUTES
 let isSettingsOpen = false
+let isOffline = false
+let offlineRetryInterval: ReturnType<typeof setInterval> | null = null
 const WIDGET_HEIGHT_COLLAPSED = 164 // 140 base + 24 status bar
 const WIDGET_ROW_HEIGHT = 30
 const GRAPH_HEIGHT = 170 // graph section height including padding
@@ -393,6 +395,8 @@ async function fetchUsageData(): Promise<void> {
     debugLog('Calling electronAPI.fetchUsageData...')
     const data = await window.electronAPI.fetchUsageData()
     debugLog('Received usage data:', data)
+    isOffline = false
+    stopOfflineRetry()
     updateUI(data)
 
     // Record usage history entry
@@ -434,7 +438,18 @@ async function fetchUsageData(): Promise<void> {
       credentials = { sessionKey: null, organizationId: null }
       showLoginRequired()
     } else {
-      debugLog('Failed to fetch usage data')
+      // Network or API error — try to show cached data
+      const cached = await window.electronAPI.getCachedUsage()
+      if (cached) {
+        isOffline = true
+        stopAutoUpdate()                            // pause normal refresh while offline
+        updateUI(cached.data)
+        lastRefreshTime = cached.timestamp          // use original fetch time, NOT Date.now()
+        updateStatusText()
+        startStatusTimer()
+        startOfflineRetry()
+      }
+      // If no cache: remain on whatever screen was already shown (login or loading state)
     }
   }
 }
@@ -840,20 +855,53 @@ function stopAutoUpdate(): void {
   }
 }
 
+function startOfflineRetry(): void {
+  stopOfflineRetry()
+  offlineRetryInterval = setInterval(async () => {
+    try {
+      const data = await window.electronAPI.fetchUsageData()
+      // Success — back online
+      isOffline = false
+      stopOfflineRetry()
+      updateUI(data)
+      lastRefreshTime = Date.now()
+      updateStatusText()
+      startStatusTimer()
+      startAutoUpdate()
+    } catch {
+      // Still offline — statusInterval already ticking via startStatusTimer
+    }
+  }, refreshIntervalMinutes * 60 * 1000)
+}
+
+function stopOfflineRetry(): void {
+  if (offlineRetryInterval) {
+    clearInterval(offlineRetryInterval)
+    offlineRetryInterval = null
+  }
+}
+
 // Status bar "Refreshed X minutes ago" logic
 function updateStatusText(): void {
   if (!lastRefreshTime) {
-    elements.statusText.textContent = 'Refreshed just now'
+    elements.statusText.textContent = isOffline ? 'Offline · No data' : 'Refreshed just now'
     return
   }
   const elapsed = Date.now() - lastRefreshTime
   const minutes = Math.floor(elapsed / 60000)
+  let timeStr: string
   if (minutes < 1) {
-    elements.statusText.textContent = 'Refreshed just now'
+    timeStr = 'just now'
   } else if (minutes === 1) {
-    elements.statusText.textContent = 'Refreshed 1 minute ago'
+    timeStr = '1 minute ago'
   } else {
-    elements.statusText.textContent = `Refreshed ${minutes} minutes ago`
+    timeStr = `${minutes} minutes ago`
+  }
+
+  if (isOffline) {
+    elements.statusText.textContent = `Offline · Last updated ${timeStr}`
+  } else {
+    elements.statusText.textContent = minutes < 1 ? 'Refreshed just now' : `Refreshed ${timeStr}`
   }
 }
 
@@ -1213,6 +1261,7 @@ init()
 // Cleanup on unload
 window.addEventListener('beforeunload', () => {
   stopAutoUpdate()
+  stopOfflineRetry()
   if (countdownInterval) clearInterval(countdownInterval)
   if (statusInterval) clearInterval(statusInterval)
 })
