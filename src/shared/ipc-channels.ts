@@ -14,6 +14,7 @@ export const IpcChannels = {
   CLEAR_USAGE_HISTORY: 'clear-usage-history',
   GET_REFRESH_INTERVAL: 'get-refresh-interval',
   SET_REFRESH_INTERVAL: 'set-refresh-interval',
+  GET_CACHED_USAGE: 'get-cached-usage',
 
   // send (renderer -> main, fire-and-forget)
   MINIMIZE_WINDOW: 'minimize-window',

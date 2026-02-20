@@ -34,6 +34,7 @@ const api = {
 
   // API
   fetchUsageData: () => ipcRenderer.invoke('fetch-usage-data'),
+  getCachedUsage: () => ipcRenderer.invoke('get-cached-usage'),
   openExternal: (url: string) => ipcRenderer.send('open-external', url),
   updateTrayUsage: (stats: { session: number; weekly: number; sonnet: number }) =>
     ipcRenderer.send('update-tray-usage', stats),

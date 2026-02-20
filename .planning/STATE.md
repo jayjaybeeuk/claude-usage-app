@@ -1,0 +1,75 @@
+# Project State
+
+## Project Reference
+
+See: .planning/PROJECT.md (updated 2026-02-20)
+
+**Core value:** Users can glance at their Claude usage limits at any time without opening a browser or interrupting their workflow.
+**Current focus:** Phase 1 - Offline Mode
+
+## Current Position
+
+Phase: 1 of 4 (Offline Mode)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-02-20 — Plan 01-03 complete (renderer offline mode, all OFFL requirements verified)
+
+Progress: [███░░░░░░░] 25%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 3
+- Average duration: 2 min
+- Total execution time: 0.1 hours
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 01-offline-mode | 3 | 7 min | 2 min |
+
+**Recent Trend:**
+- Last 5 plans: 01-01 (1 min), 01-02 (1 min), 01-03 (~5 min)
+- Trend: N/A
+
+*Updated after each plan completion*
+
+## Accumulated Context
+
+### Decisions
+
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- Show last known data when offline (simpler than timer-only fallback)
+- Prompt before auto-update install (user controls when app restarts)
+- Launch-at-startup opt-in by default (respect user preference)
+- Use electron-updater with GitHub provider (already distributing via Releases)
+- CachedUsageData.timestamp is number (Unix ms) to allow age calculation without Date parsing overhead (01-01)
+- getCachedUsage placed after fetchUsageData in ElectronAPI to group data-retrieval methods (01-01)
+- store.set calls placed after prepaid merge so cached value includes fully-merged extra_usage data (01-02)
+- Inline string literal used in preload.ts per sandbox constraints (cannot import from ipc-channels.ts) (01-02)
+- cached.timestamp used (not Date.now()) in offline branch so "Last updated X ago" reflects true data age (01-03)
+- stopAutoUpdate() called when entering offline mode to prevent normal interval firing alongside retry interval (01-03)
+- isOffline=false + stopOfflineRetry() placed in main success path for manual refresh recovery (01-03)
+
+### Pending Todos
+
+None yet.
+
+### Blockers/Concerns
+
+**Phase 3 (Auto-Updates):**
+- Code signing required before v1.4.0 ships (Apple Developer account for macOS notarization, Windows certificate for SmartScreen)
+- Lead time: Apple Developer approval can take days/weeks
+- Mitigation: Start code signing setup early (research suggests this is critical path)
+
+## Session Continuity
+
+Last session: 2026-02-20 (plan execution)
+Stopped at: Completed 01-offline-mode/01-03-PLAN.md (renderer offline mode — Phase 1 complete)
+Resume file: None
+
+---
+*State initialized: 2026-02-20*

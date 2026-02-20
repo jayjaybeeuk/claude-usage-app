@@ -22,6 +22,7 @@ import type {
   UsageData,
   ExtraUsage,
   WindowPosition,
+  CachedUsageData,
 } from '../shared/ipc-types'
 
 // Resolve project root from compiled output location (dist-main/main/main.js)
@@ -34,6 +35,8 @@ interface StoreSchema {
   windowPosition: { x: number; y: number }
   usageHistory: UsageHistoryEntry[]
   refreshIntervalMinutes: number
+  cachedUsageData: UsageData          // latest successful fetch result
+  cachedUsageTimestamp: number        // Unix ms timestamp of that fetch
 }
 
 const store = new Store<StoreSchema>({
@@ -595,7 +598,16 @@ ipcMain.handle(IpcChannels.FETCH_USAGE_DATA, async () => {
     debugLog('Prepaid fetch skipped or failed:', (prepaidResult.reason as Error)?.message || 'no data')
   }
 
+  store.set('cachedUsageData', data)
+  store.set('cachedUsageTimestamp', Date.now())
   return data
+})
+
+ipcMain.handle(IpcChannels.GET_CACHED_USAGE, (): CachedUsageData | null => {
+  const data = store.get('cachedUsageData') as UsageData | undefined
+  const timestamp = store.get('cachedUsageTimestamp') as number | undefined
+  if (!data || !timestamp) return null
+  return { data, timestamp }
 })
 
 // macOS: Set up application menu (required for keyboard shortcuts like Cmd+Q, Cmd+C, Cmd+V)
