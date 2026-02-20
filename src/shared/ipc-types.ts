@@ -72,6 +72,11 @@ export interface UsageData {
   [key: string]: UsageTimePeriod | ExtraUsage | undefined
 }
 
+export interface CachedUsageData {
+  data: UsageData
+  timestamp: number  // Unix ms — when live data was last fetched from the API
+}
+
 export interface ElectronAPI {
   getCredentials: () => Promise<Credentials>
   saveCredentials: (credentials: SaveCredentialsPayload) => Promise<boolean>
@@ -87,6 +92,7 @@ export interface ElectronAPI {
   onSessionExpired: (callback: () => void) => void
   onDebugLog: (callback: (label: string, data: unknown) => void) => void
   fetchUsageData: () => Promise<UsageData>
+  getCachedUsage: () => Promise<CachedUsageData | null>
   openExternal: (url: string) => void
   updateTrayUsage: (stats: TrayUsageStats) => void
   getUsageHistory: () => Promise<UsageHistoryEntry[]>
