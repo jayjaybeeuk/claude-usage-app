@@ -28,10 +28,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. User sees "Last updated X ago" freshness indicator when viewing cached data
   3. Widget automatically resumes live data fetching within 5 minutes when network connectivity returns
   4. Latest usage data is preserved across app restarts (persisted cache)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD
+- [ ] 01-01-PLAN.md — Shared IPC contract: GET_CACHED_USAGE channel + CachedUsageData type
+- [ ] 01-02-PLAN.md — Main process cache persistence + preload bridge
+- [ ] 01-03-PLAN.md — Renderer offline state, fallback display, status indicator, retry loop
 
 ### Phase 2: Launch at Startup
 **Goal**: User can configure widget to launch automatically at system login
@@ -84,10 +86,11 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Offline Mode | 0/0 | Not started | - |
+| 1. Offline Mode | 0/3 | In progress | - |
 | 2. Launch at Startup | 0/0 | Not started | - |
 | 3. Auto-Updates | 0/0 | Not started | - |
 | 4. Polish & Integration Testing | 0/0 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-20*
+*Phase 1 planned: 2026-02-20*
