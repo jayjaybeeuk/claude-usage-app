@@ -12,7 +12,7 @@ This roadmap delivers three table-stakes desktop widget enhancements: offline re
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Offline Mode** - Widget shows cached data when network unavailable
+- [x] **Phase 1: Offline Mode** - Widget shows cached data when network unavailable (completed 2026-02-20)
 - [ ] **Phase 2: Launch at Startup** - User can toggle autostart via tray menu
 - [ ] **Phase 3: Auto-Updates** - Widget checks for and installs updates from GitHub Releases
 - [ ] **Phase 4: Polish & Integration Testing** - Cross-platform testing and edge case handling
@@ -86,7 +86,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Offline Mode | 1/3 | In Progress|  |
+| 1. Offline Mode | 3/3 | Complete   | 2026-02-20 |
 | 2. Launch at Startup | 0/0 | Not started | - |
 | 3. Auto-Updates | 0/0 | Not started | - |
 | 4. Polish & Integration Testing | 0/0 | Not started | - |
