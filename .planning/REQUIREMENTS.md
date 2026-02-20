@@ -59,14 +59,14 @@
 | OFFL-02 | Phase 1 | Pending |
 | OFFL-03 | Phase 1 | Pending |
 | OFFL-04 | Phase 1 | Pending |
-| UPDT-01 | Phase 2 | Pending |
-| UPDT-02 | Phase 2 | Pending |
-| UPDT-03 | Phase 2 | Pending |
-| UPDT-04 | Phase 2 | Pending |
-| STRT-01 | Phase 3 | Pending |
-| STRT-02 | Phase 3 | Pending |
-| STRT-03 | Phase 3 | Pending |
-| STRT-04 | Phase 3 | Pending |
+| STRT-01 | Phase 2 | Pending |
+| STRT-02 | Phase 2 | Pending |
+| STRT-03 | Phase 2 | Pending |
+| STRT-04 | Phase 2 | Pending |
+| UPDT-01 | Phase 3 | Pending |
+| UPDT-02 | Phase 3 | Pending |
+| UPDT-03 | Phase 3 | Pending |
+| UPDT-04 | Phase 3 | Pending |
 
 **Coverage:**
 - v1 requirements: 12 total
@@ -75,4 +75,4 @@
 
 ---
 *Requirements defined: 2026-02-20*
-*Last updated: 2026-02-20 after initial definition*
+*Last updated: 2026-02-20 after roadmap creation*
