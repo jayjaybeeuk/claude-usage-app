@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ## Current Position
 
 Phase: 1 of 4 (Offline Mode)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-20 — Plan 01-01 complete (IPC contract for offline cache)
+Last activity: 2026-02-20 — Plan 01-02 complete (main process cache persistence)
 
-Progress: [█░░░░░░░░░] 8%
+Progress: [██░░░░░░░░] 17%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
+- Total plans completed: 2
 - Average duration: 1 min
 - Total execution time: 0.0 hours
 
@@ -27,10 +27,10 @@ Progress: [█░░░░░░░░░] 8%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-offline-mode | 1 | 1 min | 1 min |
+| 01-offline-mode | 2 | 2 min | 1 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (1 min)
+- Last 5 plans: 01-01 (1 min), 01-02 (1 min)
 - Trend: N/A
 
 *Updated after each plan completion*
@@ -48,6 +48,8 @@ Recent decisions affecting current work:
 - Use electron-updater with GitHub provider (already distributing via Releases)
 - CachedUsageData.timestamp is number (Unix ms) to allow age calculation without Date parsing overhead (01-01)
 - getCachedUsage placed after fetchUsageData in ElectronAPI to group data-retrieval methods (01-01)
+- store.set calls placed after prepaid merge so cached value includes fully-merged extra_usage data (01-02)
+- Inline string literal used in preload.ts per sandbox constraints (cannot import from ipc-channels.ts) (01-02)
 
 ### Pending Todos
 
@@ -63,7 +65,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-20 (plan execution)
-Stopped at: Completed 01-offline-mode/01-01-PLAN.md (IPC contract for offline cache)
+Stopped at: Completed 01-offline-mode/01-02-PLAN.md (main process cache persistence)
 Resume file: None
 
 ---
