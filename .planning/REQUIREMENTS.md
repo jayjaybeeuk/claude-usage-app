@@ -7,10 +7,10 @@
 
 ### Offline Mode
 
-- [ ] **OFFL-01**: Widget caches latest usage data locally on every successful API fetch
-- [ ] **OFFL-02**: Widget displays cached data when network is unavailable instead of showing an error
-- [ ] **OFFL-03**: Widget shows "Last updated X ago" freshness indicator when displaying cached data
-- [ ] **OFFL-04**: Widget automatically resumes fetching live data when network connectivity returns
+- [x] **OFFL-01**: Widget caches latest usage data locally on every successful API fetch
+- [x] **OFFL-02**: Widget displays cached data when network is unavailable instead of showing an error
+- [x] **OFFL-03**: Widget shows "Last updated X ago" freshness indicator when displaying cached data
+- [x] **OFFL-04**: Widget automatically resumes fetching live data when network connectivity returns
 
 ### Auto-Updates
 
@@ -55,10 +55,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OFFL-01 | Phase 1 | Pending |
-| OFFL-02 | Phase 1 | Pending |
-| OFFL-03 | Phase 1 | Pending |
-| OFFL-04 | Phase 1 | Pending |
+| OFFL-01 | Phase 1 | Complete |
+| OFFL-02 | Phase 1 | Complete |
+| OFFL-03 | Phase 1 | Complete |
+| OFFL-04 | Phase 1 | Complete |
 | STRT-01 | Phase 2 | Pending |
 | STRT-02 | Phase 2 | Pending |
 | STRT-03 | Phase 2 | Pending |
