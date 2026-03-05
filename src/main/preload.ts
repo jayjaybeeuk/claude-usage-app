@@ -49,6 +49,8 @@ const api = {
     opus?: number
     cowork?: number
     oauthApps?: number
+    codexSession?: number
+    codexWeekly?: number
   }) =>
     ipcRenderer.invoke('save-usage-history-entry', entry),
   clearUsageHistory: () => ipcRenderer.invoke('clear-usage-history'),
@@ -63,7 +65,8 @@ const api = {
 
   // Codex
   getCodexCredentials: () => ipcRenderer.invoke('get-codex-credentials'),
-  saveCodexCredentials: (accessToken: string) => ipcRenderer.invoke('save-codex-credentials', accessToken),
+  saveCodexCredentials: (credentials: { accessToken: string; cookieName?: string }) =>
+    ipcRenderer.invoke('save-codex-credentials', credentials),
   deleteCodexCredentials: () => ipcRenderer.invoke('delete-codex-credentials'),
   detectCodexToken: () => ipcRenderer.invoke('detect-codex-token'),
   fetchCodexUsageData: () => ipcRenderer.invoke('fetch-codex-usage'),

@@ -924,7 +924,7 @@ body.platform-darwin .title-bar {
 }
 
 .status-text {
-    color: #505050;
+    color: #8b5cf6;
     font-size: 9px;
     font-weight: 400;
 }
@@ -1017,15 +1017,11 @@ body.platform-darwin .title-bar {
 /* ── Codex section ────────────────────────────────────────────────────────── */
 
 /* Title bar toggle button — active state for Codex */
-.codex-toggle-btn.active {
-    background: rgba(16, 185, 129, 0.15);
-    color: #10b981;
-}
-
 /* Service divider (separator between Claude and Codex sections) */
 .service-divider {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     padding: 4px 16px 2px;
     gap: 8px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
@@ -1040,24 +1036,19 @@ body.platform-darwin .title-bar {
     white-space: nowrap;
 }
 
+.service-divider-subtitle {
+    font-size: 9px;
+    color: #606060;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+
+.claude-divider .service-divider-label {
+    color: #8b5cf6;
+}
+
 .codex-divider .service-divider-label {
     color: #10b981;
-}
-
-.codex-logout-btn {
-    background: none;
-    border: none;
-    color: #505050;
-    font-size: 14px;
-    line-height: 1;
-    cursor: pointer;
-    padding: 0 2px;
-    margin-left: auto;
-    transition: color 0.2s;
-}
-
-.codex-logout-btn:hover {
-    color: #ef4444;
 }
 
 /* Codex login row */
@@ -1196,6 +1187,28 @@ body.platform-darwin .title-bar {
     flex: 1;
     word-break: break-all;
     font-family: monospace;
+}
+
+.chart-subtitle {
+    color: #707070;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 6px;
+}
+
+.codex-status-bar .status-text {
+    color: #4f8f82;
+}
+
+.codex-graph-toggle-btn.active {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+}
+
+.codex-pie-toggle-btn.active {
+    background: rgba(20, 184, 166, 0.2);
+    color: #14b8a6;
 }
 
 /* Codex progress fills */
