@@ -60,6 +60,17 @@ const api = {
   // Platform info
   getPlatform: () => ipcRenderer.invoke('get-platform'),
   platform: process.platform,
+
+  // Codex
+  getCodexCredentials: () => ipcRenderer.invoke('get-codex-credentials'),
+  saveCodexCredentials: (accessToken: string) => ipcRenderer.invoke('save-codex-credentials', accessToken),
+  deleteCodexCredentials: () => ipcRenderer.invoke('delete-codex-credentials'),
+  detectCodexToken: () => ipcRenderer.invoke('detect-codex-token'),
+  fetchCodexUsageData: () => ipcRenderer.invoke('fetch-codex-usage'),
+  getCachedCodexUsage: () => ipcRenderer.invoke('get-cached-codex-usage'),
+  onCodexSessionExpired: (callback: () => void) => {
+    ipcRenderer.on('codex-session-expired', () => callback())
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

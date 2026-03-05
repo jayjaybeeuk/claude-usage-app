@@ -14,6 +14,8 @@ import Store from 'electron-store'
 import { fetchViaWindow } from './fetch-via-window'
 import { IpcChannels } from '../shared/ipc-channels'
 import { DEFAULT_REFRESH_MINUTES, MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES } from '../shared/refresh-interval'
+import fs from 'fs'
+import os from 'os'
 import type {
   Credentials,
   SaveCredentialsPayload,
@@ -23,6 +25,8 @@ import type {
   ExtraUsage,
   WindowPosition,
   CachedUsageData,
+  CodexUsageData,
+  CachedCodexUsageData,
 } from '../shared/ipc-types'
 
 // Resolve project root from compiled output location (dist-main/main/main.js)
@@ -37,6 +41,9 @@ interface StoreSchema {
   refreshIntervalMinutes: number
   cachedUsageData: UsageData          // latest successful fetch result
   cachedUsageTimestamp: number        // Unix ms timestamp of that fetch
+  codexAccessToken: string            // Codex Bearer token
+  cachedCodexUsageData: CodexUsageData
+  cachedCodexUsageTimestamp: number
 }
 
 const store = new Store<StoreSchema>({
@@ -193,21 +200,39 @@ let latestTrayStats: TrayUsageStats | null = null
 function buildTrayMenu(): Electron.Menu {
   const items: MenuItemConstructorOptions[] = []
 
-  // Usage stats at the top of the dropdown
+  // Claude usage stats
   if (latestTrayStats) {
+    items.push({ label: 'Claude', enabled: false })
     items.push({
-      label: `Session:  ${Math.round(latestTrayStats.session)}%`,
+      label: `  Session:  ${Math.round(latestTrayStats.session)}%`,
       enabled: false,
     })
     items.push({
-      label: `Weekly:   ${Math.round(latestTrayStats.weekly)}%`,
+      label: `  Weekly:   ${Math.round(latestTrayStats.weekly)}%`,
       enabled: false,
     })
     if (latestTrayStats.sonnet > 0) {
       items.push({
-        label: `Sonnet:   ${Math.round(latestTrayStats.sonnet)}%`,
+        label: `  Sonnet:   ${Math.round(latestTrayStats.sonnet)}%`,
         enabled: false,
       })
+    }
+    // Codex stats
+    if (latestTrayStats.codexSession !== undefined || latestTrayStats.codexWeekly !== undefined) {
+      items.push({ type: 'separator' })
+      items.push({ label: 'Codex', enabled: false })
+      if (latestTrayStats.codexSession !== undefined) {
+        items.push({
+          label: `  Session:  ${Math.round(latestTrayStats.codexSession)}%`,
+          enabled: false,
+        })
+      }
+      if (latestTrayStats.codexWeekly !== undefined) {
+        items.push({
+          label: `  Weekly:   ${Math.round(latestTrayStats.codexWeekly)}%`,
+          enabled: false,
+        })
+      }
     }
     items.push({ type: 'separator' })
   }
@@ -274,7 +299,14 @@ function updateTrayDisplay(): void {
   if (!tray) return
 
   if (isMac && latestTrayStats) {
-    tray.setTitle(`${Math.round(latestTrayStats.weekly)}%`, { fontType: 'monospacedDigit' })
+    const claudePct = `${Math.round(latestTrayStats.weekly)}%`
+    const hasCodex =
+      latestTrayStats.codexSession !== undefined || latestTrayStats.codexWeekly !== undefined
+    const codexPct =
+      latestTrayStats.codexSession !== undefined
+        ? ` ✦${Math.round(latestTrayStats.codexSession)}%`
+        : ''
+    tray.setTitle(hasCodex ? `${claudePct}${codexPct}` : claudePct, { fontType: 'monospacedDigit' })
   } else if (isMac) {
     tray.setTitle('')
   }
@@ -282,8 +314,12 @@ function updateTrayDisplay(): void {
   tray.setContextMenu(buildTrayMenu())
 
   if (latestTrayStats) {
+    const codexInfo =
+      latestTrayStats.codexSession !== undefined
+        ? ` | Codex Session: ${Math.round(latestTrayStats.codexSession)}%`
+        : ''
     tray.setToolTip(
-      `Claude — Session: ${Math.round(latestTrayStats.session)}% | Weekly: ${Math.round(latestTrayStats.weekly)}%`,
+      `Claude — Session: ${Math.round(latestTrayStats.session)}% | Weekly: ${Math.round(latestTrayStats.weekly)}%${codexInfo}`,
     )
   } else {
     tray.setToolTip('Claude Usage Widget')
@@ -606,6 +642,177 @@ ipcMain.handle(IpcChannels.FETCH_USAGE_DATA, async () => {
 ipcMain.handle(IpcChannels.GET_CACHED_USAGE, (): CachedUsageData | null => {
   const data = store.get('cachedUsageData') as UsageData | undefined
   const timestamp = store.get('cachedUsageTimestamp') as number | undefined
+  if (!data || !timestamp) return null
+  return { data, timestamp }
+})
+
+// ─── Codex IPC Handlers ───────────────────────────────────────────────────────
+
+// Parse raw wham/usage response into CodexUsageData
+function parseCodexUsageResponse(raw: Record<string, unknown>): CodexUsageData {
+  const result: CodexUsageData = {}
+
+  // Expected shape: { usage_windows: [{ window_type: 'primary'|'secondary', utilization: 0-1, resets_at: '...' }] }
+  // Also handle flat fields as fallback
+  const windows = raw.usage_windows as Array<Record<string, unknown>> | undefined
+
+  if (Array.isArray(windows)) {
+    for (const w of windows) {
+      const utilization = typeof w.utilization === 'number' ? w.utilization * 100 : undefined
+      const resets_at = (w.resets_at as string | null) ?? null
+      if (w.window_type === 'primary' || w.window_type === '5h') {
+        result.five_hour = { utilization, resets_at }
+      } else if (w.window_type === 'secondary' || w.window_type === 'weekly' || w.window_type === '7d') {
+        result.seven_day = { utilization, resets_at }
+      }
+    }
+  } else {
+    // Flat fallback — try common field names
+    const sessionUtil = raw.session_utilization ?? raw.five_hour_utilization
+    const weeklyUtil = raw.weekly_utilization ?? raw.seven_day_utilization
+    if (typeof sessionUtil === 'number') {
+      result.five_hour = {
+        utilization: sessionUtil <= 1 ? sessionUtil * 100 : sessionUtil,
+        resets_at: (raw.session_resets_at as string | null) ?? null,
+      }
+    }
+    if (typeof weeklyUtil === 'number') {
+      result.seven_day = {
+        utilization: weeklyUtil <= 1 ? weeklyUtil * 100 : weeklyUtil,
+        resets_at: (raw.weekly_resets_at as string | null) ?? null,
+      }
+    }
+  }
+
+  return result
+}
+
+ipcMain.handle(IpcChannels.GET_CODEX_CREDENTIALS, () => {
+  return {
+    accessToken: store.get('codexAccessToken') ?? null,
+  }
+})
+
+ipcMain.handle(IpcChannels.SAVE_CODEX_CREDENTIALS, (_event: Electron.IpcMainInvokeEvent, accessToken: string) => {
+  store.set('codexAccessToken', accessToken)
+  return true
+})
+
+ipcMain.handle(IpcChannels.DELETE_CODEX_CREDENTIALS, () => {
+  store.delete('codexAccessToken' as keyof StoreSchema)
+  store.delete('cachedCodexUsageData' as keyof StoreSchema)
+  store.delete('cachedCodexUsageTimestamp' as keyof StoreSchema)
+  return true
+})
+
+// Auto-detect Codex token: try ~/.codex/auth.json first, then open chatgpt.com
+ipcMain.handle(IpcChannels.DETECT_CODEX_TOKEN, async () => {
+  // 1. Try reading from ~/.codex/auth.json
+  try {
+    const authPath = path.join(os.homedir(), '.codex', 'auth.json')
+    if (fs.existsSync(authPath)) {
+      const raw = fs.readFileSync(authPath, 'utf-8')
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      const token = parsed.access_token ?? parsed.accessToken
+      if (typeof token === 'string' && token.length > 10) {
+        debugLog('Codex token found in ~/.codex/auth.json')
+        return { success: true, accessToken: token }
+      }
+    }
+  } catch (err) {
+    debugLog('Could not read ~/.codex/auth.json:', (err as Error).message)
+  }
+
+  // 2. Fallback: open chatgpt.com and listen for auth cookie
+  return new Promise((resolve) => {
+    const loginWin = new BrowserWindow({
+      width: 1000,
+      height: 700,
+      title: 'Log in to ChatGPT (Codex)',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    })
+
+    let resolved = false
+
+    const CODEX_TOKEN_COOKIES = ['__Secure-next-auth.session-token', 'next-auth.session-token', '__cf_bm']
+
+    const onCookieChanged = (
+      _event: Electron.Event,
+      cookie: Electron.Cookie,
+      _cause: string,
+      removed: boolean,
+    ): void => {
+      if (
+        !removed &&
+        cookie.value &&
+        cookie.domain?.includes('chatgpt.com') &&
+        CODEX_TOKEN_COOKIES.includes(cookie.name)
+      ) {
+        resolved = true
+        session.defaultSession.cookies.removeListener('changed', onCookieChanged)
+        loginWin.close()
+        resolve({ success: true, accessToken: cookie.value })
+      }
+    }
+
+    session.defaultSession.cookies.on('changed', onCookieChanged)
+
+    loginWin.on('closed', () => {
+      session.defaultSession.cookies.removeListener('changed', onCookieChanged)
+      if (!resolved) {
+        resolve({ success: false, error: 'Login window closed' })
+      }
+    })
+
+    loginWin.loadURL('https://chatgpt.com/login')
+  })
+})
+
+ipcMain.handle(IpcChannels.FETCH_CODEX_USAGE, async () => {
+  const accessToken = store.get('codexAccessToken') as string | undefined
+  if (!accessToken) {
+    throw new Error('Missing Codex credentials')
+  }
+
+  try {
+    const response = await session.defaultSession.fetch('https://chatgpt.com/backend-api/wham/usage', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'User-Agent': USER_AGENT,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (response.status === 401 || response.status === 403) {
+      store.delete('codexAccessToken' as keyof StoreSchema)
+      if (mainWindow) {
+        mainWindow.webContents.send(IpcChannels.CODEX_SESSION_EXPIRED)
+      }
+      throw new Error('CodexSessionExpired')
+    }
+
+    const raw = (await response.json()) as Record<string, unknown>
+    debugLogToRenderer('Raw Codex usage API response:', raw)
+
+    const data = parseCodexUsageResponse(raw)
+    store.set('cachedCodexUsageData', data)
+    store.set('cachedCodexUsageTimestamp', Date.now())
+    return data
+  } catch (error) {
+    const err = error as Error
+    if (err.message === 'CodexSessionExpired') throw err
+    console.error('Codex usage fetch failed:', err.message)
+    throw err
+  }
+})
+
+ipcMain.handle(IpcChannels.GET_CACHED_CODEX_USAGE, (): CachedCodexUsageData | null => {
+  const data = store.get('cachedCodexUsageData') as CodexUsageData | undefined
+  const timestamp = store.get('cachedCodexUsageTimestamp') as number | undefined
   if (!data || !timestamp) return null
   return { data, timestamp }
 })
