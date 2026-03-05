@@ -1,6 +1,6 @@
 import './styles.css'
 import { DEFAULT_REFRESH_MINUTES, MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES } from '../shared/refresh-interval'
-import type { Credentials, UsageData, UsageTimePeriod, ExtraUsage, UsageHistoryEntry } from '../shared/ipc-types'
+import type { Credentials, UsageData, UsageTimePeriod, ExtraUsage, UsageHistoryEntry, CodexUsageData } from '../shared/ipc-types'
 
 // Application state
 let credentials: Credentials | null = null
@@ -22,6 +22,13 @@ const GRAPH_HEIGHT = 170 // graph section height including padding
 const PIE_HEIGHT = 162 // pie section height including padding — must match .pie-section CSS height
 const SONNET_ROW_HEIGHT = 30 // sonnet row height
 let lastNonSettingsHeight = WIDGET_HEIGHT_COLLAPSED
+
+// Codex state
+let codexVisible = false
+let codexHasData = false
+let latestCodexData: CodexUsageData | null = null
+let codexCountdownInterval: ReturnType<typeof setInterval> | null = null
+const CODEX_SECTION_HEIGHT = 28 + 32 + 32 // divider + 2 usage rows
 
 // Debug logging — only shows in DevTools (development mode).
 // Regular users won't see verbose logs in production.
@@ -100,6 +107,33 @@ const elements = {
   coffeeBtnAlt: getElement<HTMLButtonElement>('coffeeBtnAlt'),
   refreshIntervalSlider: getElement<HTMLInputElement>('refreshIntervalSlider'),
   refreshIntervalValue: getElement<HTMLSpanElement>('refreshIntervalValue'),
+
+  // Codex
+  codexToggleBtn: getElement<HTMLButtonElement>('codexToggleBtn'),
+  codexSection: getElement<HTMLDivElement>('codexSection'),
+  codexLoginContainer: getElement<HTMLDivElement>('codexLoginContainer'),
+  codexContent: getElement<HTMLDivElement>('codexContent'),
+  codexAutoDetectBtn: getElement<HTMLButtonElement>('codexAutoDetectBtn'),
+  codexManualBtn: getElement<HTMLButtonElement>('codexManualBtn'),
+  codexManualInput: getElement<HTMLDivElement>('codexManualInput'),
+  codexTokenInput: getElement<HTMLInputElement>('codexTokenInput'),
+  codexSaveBtn: getElement<HTMLButtonElement>('codexSaveBtn'),
+  codexTokenError: getElement<HTMLParagraphElement>('codexTokenError'),
+  codexBackBtn: getElement<HTMLButtonElement>('codexBackBtn'),
+  codexLoginError: getElement<HTMLParagraphElement>('codexLoginError'),
+  codexLogoutBtn: getElement<HTMLButtonElement>('codexLogoutBtn'),
+
+  codexSessionProgress: getElement<HTMLDivElement>('codexSessionProgress'),
+  codexSessionPercentage: getElement<HTMLSpanElement>('codexSessionPercentage'),
+  codexSessionTimer: getElement<SVGCircleElement>('codexSessionTimer'),
+  codexSessionTimeText: getElement<HTMLDivElement>('codexSessionTimeText'),
+  codexSessionUsageRing: getElement<SVGCircleElement>('codexSessionUsageRing'),
+
+  codexWeeklyProgress: getElement<HTMLDivElement>('codexWeeklyProgress'),
+  codexWeeklyPercentage: getElement<HTMLSpanElement>('codexWeeklyPercentage'),
+  codexWeeklyTimer: getElement<SVGCircleElement>('codexWeeklyTimer'),
+  codexWeeklyTimeText: getElement<HTMLDivElement>('codexWeeklyTimeText'),
+  codexWeeklyUsageRing: getElement<SVGCircleElement>('codexWeeklyUsageRing'),
 }
 
 function clampRefreshMinutes(value: number): number {
@@ -307,6 +341,46 @@ function setupEventListeners(): void {
   window.electronAPI.onDebugLog((label: string, data: unknown) => {
     console.log('[Debug]', label, data)
   })
+
+  // Codex toggle
+  elements.codexToggleBtn.addEventListener('click', toggleCodexSection)
+
+  // Codex login flow
+  elements.codexAutoDetectBtn.addEventListener('click', handleCodexAutoDetect)
+  elements.codexManualBtn.addEventListener('click', () => {
+    elements.codexManualInput.style.display = 'block'
+    elements.codexAutoDetectBtn.style.display = 'none'
+    elements.codexManualBtn.style.display = 'none'
+    elements.codexTokenInput.focus()
+  })
+  elements.codexBackBtn.addEventListener('click', () => {
+    elements.codexManualInput.style.display = 'none'
+    elements.codexAutoDetectBtn.style.display = ''
+    elements.codexManualBtn.style.display = ''
+    elements.codexTokenError.textContent = ''
+  })
+  elements.codexSaveBtn.addEventListener('click', handleCodexManualToken)
+  elements.codexTokenInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') handleCodexManualToken()
+    elements.codexTokenError.textContent = ''
+  })
+  elements.codexLogoutBtn.addEventListener('click', async () => {
+    await window.electronAPI.deleteCodexCredentials()
+    latestCodexData = null
+    codexHasData = false
+    showCodexLogin()
+    resizeWidget()
+  })
+
+  window.electronAPI.onCodexSessionExpired(() => {
+    debugLog('Codex session expired')
+    latestCodexData = null
+    codexHasData = false
+    if (codexVisible) {
+      showCodexLogin()
+      resizeWidget()
+    }
+  })
 }
 
 // Handle manual sessionKey connect
@@ -415,11 +489,13 @@ async function fetchUsageData(): Promise<void> {
     }
     await window.electronAPI.saveUsageHistoryEntry(historyEntry)
 
-    // Update tray with latest stats
+    // Update tray with latest stats (include Codex if available)
     window.electronAPI.updateTrayUsage({
       session: historyEntry.session,
       weekly: historyEntry.weekly,
       sonnet: historyEntry.sonnet,
+      codexSession: latestCodexData?.five_hour?.utilization,
+      codexWeekly: latestCodexData?.seven_day?.utilization,
     })
 
     // Refresh graph if visible
@@ -603,6 +679,14 @@ function resizeWidget(): void {
   const extraCount = elements.extraRows.children.length
   if (isExpanded && extraCount > 0) {
     height += 12 + extraCount * WIDGET_ROW_HEIGHT
+  }
+
+  // Add Codex section if visible and has data
+  if (codexVisible && codexHasData) {
+    height += CODEX_SECTION_HEIGHT
+  } else if (codexVisible && !codexHasData) {
+    // Login UI is taller
+    height += CODEX_SECTION_HEIGHT + 20
   }
 
   lastNonSettingsHeight = height
@@ -909,6 +993,159 @@ function startStatusTimer(): void {
   if (statusInterval) clearInterval(statusInterval)
   statusInterval = setInterval(updateStatusText, 30000) // update every 30s
 }
+
+// ─── Codex Functions ──────────────────────────────────────────────────────────
+
+function toggleCodexSection(): void {
+  codexVisible = !codexVisible
+  elements.codexSection.style.display = codexVisible ? 'block' : 'none'
+  elements.codexToggleBtn.classList.toggle('active', codexVisible)
+  if (codexVisible) {
+    initCodexSection()
+  } else {
+    stopCodexCountdown()
+  }
+  resizeWidget()
+}
+
+async function initCodexSection(): Promise<void> {
+  const creds = await window.electronAPI.getCodexCredentials()
+  if (creds.accessToken) {
+    await fetchCodexUsageData()
+  } else {
+    showCodexLogin()
+  }
+}
+
+function showCodexLogin(): void {
+  elements.codexLoginContainer.style.display = 'block'
+  elements.codexContent.style.display = 'none'
+  elements.codexManualInput.style.display = 'none'
+  elements.codexAutoDetectBtn.style.display = ''
+  elements.codexManualBtn.style.display = ''
+  elements.codexLoginError.textContent = ''
+}
+
+function showCodexContent(): void {
+  elements.codexLoginContainer.style.display = 'none'
+  elements.codexContent.style.display = 'block'
+  codexHasData = true
+}
+
+async function fetchCodexUsageData(): Promise<void> {
+  try {
+    const data = await window.electronAPI.fetchCodexUsageData()
+    latestCodexData = data
+    showCodexContent()
+    updateCodexUI(data)
+    startCodexCountdown()
+    // Update tray with Codex stats included
+    if (latestUsageData) {
+      window.electronAPI.updateTrayUsage({
+        session: latestUsageData.five_hour?.utilization || 0,
+        weekly: latestUsageData.seven_day?.utilization || 0,
+        sonnet: latestUsageData.seven_day_sonnet?.utilization || 0,
+        codexSession: data.five_hour?.utilization,
+        codexWeekly: data.seven_day?.utilization,
+      })
+    }
+    resizeWidget()
+  } catch (error) {
+    const err = error as Error
+    if (err.message.includes('CodexSessionExpired') || err.message.includes('Missing Codex')) {
+      showCodexLogin()
+    } else {
+      // Try cached
+      const cached = await window.electronAPI.getCachedCodexUsage()
+      if (cached) {
+        latestCodexData = cached.data
+        showCodexContent()
+        updateCodexUI(cached.data)
+        startCodexCountdown()
+        resizeWidget()
+      } else {
+        showCodexLogin()
+        elements.codexLoginError.textContent = 'Failed to fetch. Try reconnecting.'
+      }
+    }
+  }
+}
+
+function updateCodexUI(data: CodexUsageData): void {
+  const sessionUtil = data.five_hour?.utilization ?? 0
+  const weeklyUtil = data.seven_day?.utilization ?? 0
+
+  updateProgressBar(elements.codexSessionProgress, elements.codexSessionPercentage, sessionUtil)
+  updateUsageRing(elements.codexSessionUsageRing, sessionUtil)
+  updateTimer(elements.codexSessionTimer, elements.codexSessionTimeText, data.five_hour?.resets_at ?? null, 5 * 60)
+
+  updateProgressBar(elements.codexWeeklyProgress, elements.codexWeeklyPercentage, weeklyUtil)
+  updateUsageRing(elements.codexWeeklyUsageRing, weeklyUtil)
+  updateTimer(elements.codexWeeklyTimer, elements.codexWeeklyTimeText, data.seven_day?.resets_at ?? null, 7 * 24 * 60)
+}
+
+function startCodexCountdown(): void {
+  stopCodexCountdown()
+  codexCountdownInterval = setInterval(() => {
+    if (latestCodexData) updateCodexUI(latestCodexData)
+  }, 1000)
+}
+
+function stopCodexCountdown(): void {
+  if (codexCountdownInterval) {
+    clearInterval(codexCountdownInterval)
+    codexCountdownInterval = null
+  }
+}
+
+async function handleCodexAutoDetect(): Promise<void> {
+  elements.codexAutoDetectBtn.disabled = true
+  elements.codexAutoDetectBtn.textContent = 'Detecting...'
+  elements.codexLoginError.textContent = ''
+
+  try {
+    const result = await window.electronAPI.detectCodexToken()
+    if (result.success && result.accessToken) {
+      await window.electronAPI.saveCodexCredentials(result.accessToken)
+      await fetchCodexUsageData()
+    } else {
+      elements.codexLoginError.textContent = result.error || 'Detection failed'
+    }
+  } catch (err) {
+    elements.codexLoginError.textContent = (err as Error).message || 'Detection failed'
+  } finally {
+    elements.codexAutoDetectBtn.disabled = false
+    elements.codexAutoDetectBtn.textContent = 'Connect'
+  }
+}
+
+async function handleCodexManualToken(): Promise<void> {
+  const token = elements.codexTokenInput.value.trim()
+  if (!token) {
+    elements.codexTokenError.textContent = 'Please paste your Bearer token'
+    return
+  }
+
+  elements.codexSaveBtn.disabled = true
+  elements.codexSaveBtn.textContent = '...'
+  elements.codexTokenError.textContent = ''
+
+  try {
+    await window.electronAPI.saveCodexCredentials(token)
+    elements.codexTokenInput.value = ''
+    await fetchCodexUsageData()
+    if (!codexHasData) {
+      elements.codexTokenError.textContent = 'Token saved but fetch failed. Check the token is valid.'
+    }
+  } catch {
+    elements.codexTokenError.textContent = 'Failed to connect. Check your token.'
+  } finally {
+    elements.codexSaveBtn.disabled = false
+    elements.codexSaveBtn.textContent = 'Save'
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Lightweight Canvas 2D usage history chart (no external dependencies)
 async function renderUsageChart(): Promise<void> {
@@ -1262,6 +1499,7 @@ init()
 window.addEventListener('beforeunload', () => {
   stopAutoUpdate()
   stopOfflineRetry()
+  stopCodexCountdown()
   if (countdownInterval) clearInterval(countdownInterval)
   if (statusInterval) clearInterval(statusInterval)
 })

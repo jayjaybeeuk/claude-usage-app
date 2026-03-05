@@ -1013,3 +1013,216 @@ body.platform-darwin .title-bar {
 .sonnet-row {
     margin-top: -2px;
 }
+
+/* ── Codex section ────────────────────────────────────────────────────────── */
+
+/* Title bar toggle button — active state for Codex */
+.codex-toggle-btn.active {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+/* Service divider (separator between Claude and Codex sections) */
+.service-divider {
+    display: flex;
+    align-items: center;
+    padding: 4px 16px 2px;
+    gap: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.service-divider-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #505050;
+    white-space: nowrap;
+}
+
+.codex-divider .service-divider-label {
+    color: #10b981;
+}
+
+.codex-logout-btn {
+    background: none;
+    border: none;
+    color: #505050;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+    margin-left: auto;
+    transition: color 0.2s;
+}
+
+.codex-logout-btn:hover {
+    color: #ef4444;
+}
+
+/* Codex login row */
+.codex-login-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 16px 6px;
+    flex-wrap: wrap;
+}
+
+.codex-login-text {
+    color: #a0a0a0;
+    font-size: 11px;
+    flex: 1;
+    min-width: 100px;
+}
+
+.codex-login-error {
+    color: #ef4444;
+    font-size: 9px;
+    width: 100%;
+    margin: 0;
+    min-height: 0;
+}
+
+.codex-connect-btn {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.codex-connect-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.codex-connect-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.codex-manual-btn {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #a0a0a0;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.codex-manual-btn:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #e0e0e0;
+}
+
+/* Codex manual token input */
+.codex-token-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 16px 0;
+}
+
+.codex-token-row input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #e0e0e0;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: monospace;
+    transition: border-color 0.2s;
+}
+
+.codex-token-row input:focus {
+    border-color: #10b981;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.codex-token-row input::placeholder {
+    color: #505050;
+}
+
+.codex-save-btn {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.codex-save-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.codex-save-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.codex-token-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 16px 6px;
+}
+
+.codex-token-error {
+    color: #ef4444;
+    font-size: 9px;
+    min-height: 14px;
+    margin: 0;
+    flex: 1;
+    word-break: break-all;
+    font-family: monospace;
+}
+
+/* Codex progress fills */
+.progress-fill.codex {
+    background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+.progress-fill.codex-weekly {
+    background: linear-gradient(90deg, #0d9488 0%, #14b8a6 100%);
+    box-shadow: 0 0 10px rgba(13, 148, 136, 0.3);
+}
+
+/* Codex timer circles */
+.timer-progress.codex {
+    stroke: #10b981;
+}
+
+.timer-progress.codex-weekly {
+    stroke: #0d9488;
+}
+
+/* Codex usage rings */
+.usage-ring.codex {
+    stroke: #059669;
+}
+
+.usage-ring.codex-weekly {
+    stroke: #0f766e;
+}

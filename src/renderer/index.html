@@ -20,6 +20,11 @@
                     <span>Claude Usage</span>
                 </div>
                 <div class="controls">
+                    <button class="control-btn codex-toggle-btn" id="codexToggleBtn" title="Toggle Codex usage">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
+                        </svg>
+                    </button>
                     <button class="control-btn settings-btn" id="settingsBtn" title="Settings">⚙️</button>
                     <button class="control-btn refresh-btn" id="refreshBtn" title="Refresh">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -195,6 +200,78 @@
                     <div id="extraRows"></div>
                 </div>
 
+            </div>
+
+            <!-- Codex Section -->
+            <div id="codexSection" style="display: none;">
+                <!-- Codex Login -->
+                <div id="codexLoginContainer">
+                    <div class="service-divider codex-divider">
+                        <span class="service-divider-label">Codex</span>
+                    </div>
+                    <div class="codex-login-row">
+                        <span class="codex-login-text">Connect OpenAI Codex</span>
+                        <p class="codex-login-error" id="codexLoginError"></p>
+                        <button class="codex-connect-btn" id="codexAutoDetectBtn">Connect</button>
+                        <button class="codex-manual-btn" id="codexManualBtn">Manual →</button>
+                    </div>
+                    <div id="codexManualInput" style="display: none;">
+                        <div class="codex-token-row">
+                            <input type="password" id="codexTokenInput" placeholder="Bearer token..." spellcheck="false" autocomplete="off">
+                            <button class="codex-save-btn" id="codexSaveBtn">Save</button>
+                        </div>
+                        <div class="codex-token-footer">
+                            <p class="codex-token-error" id="codexTokenError"></p>
+                            <button class="back-step-btn" id="codexBackBtn">← Back</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Codex Usage Content -->
+                <div id="codexContent" style="display: none;">
+                    <div class="service-divider codex-divider">
+                        <span class="service-divider-label">Codex</span>
+                        <button class="codex-logout-btn" id="codexLogoutBtn" title="Disconnect Codex">×</button>
+                    </div>
+                    <!-- Codex Session -->
+                    <div class="usage-section">
+                        <span class="usage-label">Session</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill codex" id="codexSessionProgress" style="width: 0%"></div>
+                        </div>
+                        <span class="usage-percentage" id="codexSessionPercentage">0%</span>
+                        <div class="timer-container">
+                            <div class="timer-text" id="codexSessionTimeText">--:--</div>
+                            <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
+                                <circle class="timer-bg" cx="12" cy="12" r="10" />
+                                <circle class="timer-progress codex" id="codexSessionTimer" cx="12" cy="12" r="10"
+                                    style="stroke-dasharray: 63; stroke-dashoffset: 63" />
+                                <circle class="usage-ring-bg" cx="12" cy="12" r="6" />
+                                <circle class="usage-ring codex" id="codexSessionUsageRing" cx="12" cy="12" r="6"
+                                    style="stroke-dasharray: 37.7; stroke-dashoffset: 37.7" />
+                            </svg>
+                        </div>
+                    </div>
+                    <!-- Codex Weekly -->
+                    <div class="usage-section">
+                        <span class="usage-label">Weekly</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill codex-weekly" id="codexWeeklyProgress" style="width: 0%"></div>
+                        </div>
+                        <span class="usage-percentage" id="codexWeeklyPercentage">0%</span>
+                        <div class="timer-container">
+                            <div class="timer-text" id="codexWeeklyTimeText">--:--</div>
+                            <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
+                                <circle class="timer-bg" cx="12" cy="12" r="10" />
+                                <circle class="timer-progress codex-weekly" id="codexWeeklyTimer" cx="12" cy="12" r="10"
+                                    style="stroke-dasharray: 63; stroke-dashoffset: 63" />
+                                <circle class="usage-ring-bg" cx="12" cy="12" r="6" />
+                                <circle class="usage-ring codex-weekly" id="codexWeeklyUsageRing" cx="12" cy="12" r="6"
+                                    style="stroke-dasharray: 37.7; stroke-dashoffset: 37.7" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Settings Overlay -->
