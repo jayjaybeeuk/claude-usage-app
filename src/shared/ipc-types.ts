@@ -36,6 +36,8 @@ export interface TrayUsageStats {
   session: number
   weekly: number
   sonnet: number
+  codexSession?: number
+  codexWeekly?: number
 }
 
 export interface UsageHistoryEntry {
@@ -46,6 +48,8 @@ export interface UsageHistoryEntry {
   opus?: number
   cowork?: number
   oauthApps?: number
+  codexSession?: number
+  codexWeekly?: number
 }
 
 export interface UsageTimePeriod {
@@ -77,6 +81,32 @@ export interface CachedUsageData {
   timestamp: number  // Unix ms — when live data was last fetched from the API
 }
 
+export interface CodexCredentials {
+  accessToken: string | null
+}
+
+export interface SaveCodexCredentialsPayload {
+  accessToken: string
+  cookieName?: string
+}
+
+export interface DetectCodexResult {
+  success: boolean
+  accessToken?: string
+  cookieName?: string
+  error?: string
+}
+
+export interface CodexUsageData {
+  five_hour?: UsageTimePeriod
+  seven_day?: UsageTimePeriod
+}
+
+export interface CachedCodexUsageData {
+  data: CodexUsageData
+  timestamp: number
+}
+
 export interface ElectronAPI {
   getCredentials: () => Promise<Credentials>
   saveCredentials: (credentials: SaveCredentialsPayload) => Promise<boolean>
@@ -102,4 +132,12 @@ export interface ElectronAPI {
   getRefreshIntervalMinutes: () => Promise<number>
   setRefreshIntervalMinutes: (minutes: number) => Promise<number>
   platform: string
+  // Codex
+  getCodexCredentials: () => Promise<CodexCredentials>
+  saveCodexCredentials: (credentials: SaveCodexCredentialsPayload) => Promise<boolean>
+  deleteCodexCredentials: () => Promise<boolean>
+  detectCodexToken: () => Promise<DetectCodexResult>
+  fetchCodexUsageData: () => Promise<CodexUsageData>
+  getCachedCodexUsage: () => Promise<CachedCodexUsageData | null>
+  onCodexSessionExpired: (callback: () => void) => void
 }

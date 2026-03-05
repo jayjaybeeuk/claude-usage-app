@@ -23,8 +23,17 @@ export const IpcChannels = {
   OPEN_EXTERNAL: 'open-external',
   UPDATE_TRAY_USAGE: 'update-tray-usage',
 
+  // Codex invoke channels
+  GET_CODEX_CREDENTIALS: 'get-codex-credentials',
+  SAVE_CODEX_CREDENTIALS: 'save-codex-credentials',
+  DELETE_CODEX_CREDENTIALS: 'delete-codex-credentials',
+  DETECT_CODEX_TOKEN: 'detect-codex-token',
+  FETCH_CODEX_USAGE: 'fetch-codex-usage',
+  GET_CACHED_CODEX_USAGE: 'get-cached-codex-usage',
+
   // on (main -> renderer)
   REFRESH_USAGE: 'refresh-usage',
   SESSION_EXPIRED: 'session-expired',
+  CODEX_SESSION_EXPIRED: 'codex-session-expired',
   DEBUG_LOG: 'debug-log',
 } as const

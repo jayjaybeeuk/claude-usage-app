@@ -14,15 +14,20 @@ import Store from 'electron-store'
 import { fetchViaWindow } from './fetch-via-window'
 import { IpcChannels } from '../shared/ipc-channels'
 import { DEFAULT_REFRESH_MINUTES, MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES } from '../shared/refresh-interval'
+import fs from 'fs'
+import os from 'os'
 import type {
   Credentials,
   SaveCredentialsPayload,
   TrayUsageStats,
   UsageHistoryEntry,
   UsageData,
+  UsageTimePeriod,
   ExtraUsage,
   WindowPosition,
   CachedUsageData,
+  CodexUsageData,
+  CachedCodexUsageData,
 } from '../shared/ipc-types'
 
 // Resolve project root from compiled output location (dist-main/main/main.js)
@@ -37,6 +42,10 @@ interface StoreSchema {
   refreshIntervalMinutes: number
   cachedUsageData: UsageData          // latest successful fetch result
   cachedUsageTimestamp: number        // Unix ms timestamp of that fetch
+  codexAccessToken: string            // Codex session cookie value
+  codexCookieName: string             // Name of the captured auth cookie
+  cachedCodexUsageData: CodexUsageData
+  cachedCodexUsageTimestamp: number
 }
 
 const store = new Store<StoreSchema>({
@@ -99,6 +108,19 @@ async function setSessionCookie(sessionKey: string): Promise<void> {
     httpOnly: true,
   })
   debugLog('sessionKey cookie set in Electron session')
+}
+
+async function setCodexCookie(cookieName: string, token: string): Promise<void> {
+  await session.defaultSession.cookies.set({
+    url: 'https://chatgpt.com',
+    name: cookieName,
+    value: normalizeBearerToken(token),
+    domain: '.chatgpt.com',
+    path: '/',
+    secure: true,
+    httpOnly: true,
+  })
+  debugLog(`Codex cookie set in Electron session (${cookieName})`)
 }
 
 // Get tray icon (macOS uses template images for proper dark/light menu bar support)
@@ -193,21 +215,39 @@ let latestTrayStats: TrayUsageStats | null = null
 function buildTrayMenu(): Electron.Menu {
   const items: MenuItemConstructorOptions[] = []
 
-  // Usage stats at the top of the dropdown
+  // Claude usage stats
   if (latestTrayStats) {
+    items.push({ label: 'Claude', enabled: false })
     items.push({
-      label: `Session:  ${Math.round(latestTrayStats.session)}%`,
+      label: `  Session:  ${Math.round(latestTrayStats.session)}%`,
       enabled: false,
     })
     items.push({
-      label: `Weekly:   ${Math.round(latestTrayStats.weekly)}%`,
+      label: `  Weekly:   ${Math.round(latestTrayStats.weekly)}%`,
       enabled: false,
     })
     if (latestTrayStats.sonnet > 0) {
       items.push({
-        label: `Sonnet:   ${Math.round(latestTrayStats.sonnet)}%`,
+        label: `  Sonnet:   ${Math.round(latestTrayStats.sonnet)}%`,
         enabled: false,
       })
+    }
+    // Codex stats
+    if (latestTrayStats.codexSession !== undefined || latestTrayStats.codexWeekly !== undefined) {
+      items.push({ type: 'separator' })
+      items.push({ label: 'Codex', enabled: false })
+      if (latestTrayStats.codexSession !== undefined) {
+        items.push({
+          label: `  Session:  ${Math.round(latestTrayStats.codexSession)}%`,
+          enabled: false,
+        })
+      }
+      if (latestTrayStats.codexWeekly !== undefined) {
+        items.push({
+          label: `  Weekly:   ${Math.round(latestTrayStats.codexWeekly)}%`,
+          enabled: false,
+        })
+      }
     }
     items.push({ type: 'separator' })
   }
@@ -274,7 +314,14 @@ function updateTrayDisplay(): void {
   if (!tray) return
 
   if (isMac && latestTrayStats) {
-    tray.setTitle(`${Math.round(latestTrayStats.weekly)}%`, { fontType: 'monospacedDigit' })
+    const claudePct = `${Math.round(latestTrayStats.weekly)}%`
+    const hasCodex =
+      latestTrayStats.codexSession !== undefined || latestTrayStats.codexWeekly !== undefined
+    const codexPct =
+      latestTrayStats.codexSession !== undefined
+        ? ` ✦${Math.round(latestTrayStats.codexSession)}%`
+        : ''
+    tray.setTitle(hasCodex ? `${claudePct}${codexPct}` : claudePct, { fontType: 'monospacedDigit' })
   } else if (isMac) {
     tray.setTitle('')
   }
@@ -282,11 +329,15 @@ function updateTrayDisplay(): void {
   tray.setContextMenu(buildTrayMenu())
 
   if (latestTrayStats) {
+    const codexInfo =
+      latestTrayStats.codexSession !== undefined
+        ? ` | Codex Session: ${Math.round(latestTrayStats.codexSession)}%`
+        : ''
     tray.setToolTip(
-      `Claude — Session: ${Math.round(latestTrayStats.session)}% | Weekly: ${Math.round(latestTrayStats.weekly)}%`,
+      `Agent Usage — Claude Session: ${Math.round(latestTrayStats.session)}% | Weekly: ${Math.round(latestTrayStats.weekly)}%${codexInfo}`,
     )
   } else {
-    tray.setToolTip('Claude Usage Widget')
+    tray.setToolTip('Agent Usage')
   }
 }
 
@@ -565,22 +616,57 @@ ipcMain.handle(IpcChannels.FETCH_USAGE_DATA, async () => {
   const data = usageResult.value as UsageData
   debugLogToRenderer('Raw usage API response:', data)
 
+  const toNumber = (value: unknown): number | undefined => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string') {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+    return undefined
+  }
+
+  const normalizeExtraUsage = (source: Record<string, unknown> | undefined): ExtraUsage | undefined => {
+    if (!source) return undefined
+    const limit = toNumber(source.monthly_limit ?? source.monthly_credit_limit ?? source.spend_limit_amount_cents ?? source.limit_cents)
+    const used = toNumber(source.used_credits ?? source.used_credit ?? source.used_cents ?? source.balance_cents)
+    const utilization = toNumber(source.utilization)
+    const enabled = source.is_enabled !== undefined ? Boolean(source.is_enabled) : limit != null
+
+    if (!enabled || typeof limit !== 'number' || limit <= 0 || typeof used !== 'number' || used < 0) {
+      return undefined
+    }
+
+    return {
+      utilization: utilization ?? (used / limit) * 100,
+      resets_at: null,
+      used_cents: used,
+      limit_cents: limit,
+    } satisfies ExtraUsage
+  }
+
+  // Prefer spending values already present in the primary usage response.
+  const usageExtraSource =
+    data.extra_usage && typeof data.extra_usage === 'object' ? (data.extra_usage as unknown as Record<string, unknown>) : undefined
+  const normalizedFromUsage = normalizeExtraUsage(usageExtraSource)
+  if (normalizedFromUsage) {
+    data.extra_usage = {
+      ...(data.extra_usage ?? {}),
+      ...normalizedFromUsage,
+    }
+  }
+
   // Merge overage spending data into data.extra_usage
   if (overageResult.status === 'fulfilled' && overageResult.value) {
     const overage = overageResult.value as Record<string, unknown>
     debugLogToRenderer('Raw overage API response:', overage)
-    const limit = (overage.monthly_credit_limit ?? overage.spend_limit_amount_cents) as number | undefined
-    const used = (overage.used_credits ?? overage.balance_cents) as number | undefined
-    const enabled =
-      overage.is_enabled !== undefined ? (overage.is_enabled as boolean) : limit != null
-
-    if (enabled && typeof limit === 'number' && limit > 0 && typeof used === 'number') {
+    const normalizedFromOverage = normalizeExtraUsage(overage)
+    const hasUsageSpending = data.extra_usage?.used_cents != null && data.extra_usage?.limit_cents != null
+    // Only fall back to overage API if usage response did not include spending fields.
+    if (!hasUsageSpending && normalizedFromOverage) {
       data.extra_usage = {
-        utilization: (used / limit) * 100,
-        resets_at: null,
-        used_cents: used,
-        limit_cents: limit,
-      } satisfies ExtraUsage
+        ...(data.extra_usage ?? {}),
+        ...normalizedFromOverage,
+      }
     }
   } else if (overageResult.status === 'rejected') {
     debugLog('Overage fetch skipped or failed:', (overageResult.reason as Error)?.message || 'no data')
@@ -606,6 +692,360 @@ ipcMain.handle(IpcChannels.FETCH_USAGE_DATA, async () => {
 ipcMain.handle(IpcChannels.GET_CACHED_USAGE, (): CachedUsageData | null => {
   const data = store.get('cachedUsageData') as UsageData | undefined
   const timestamp = store.get('cachedUsageTimestamp') as number | undefined
+  if (!data || !timestamp) return null
+  return { data, timestamp }
+})
+
+// ─── Codex IPC Handlers ───────────────────────────────────────────────────────
+
+// Parse raw wham/usage response into CodexUsageData
+function parseCodexUsageResponse(raw: Record<string, unknown>): CodexUsageData {
+  const result: CodexUsageData = {}
+
+  // Preferred shape:
+  // {
+  //   primary_window: { used_percent, reset_at|reset_after_seconds, ... },
+  //   secondary_window: { used_percent, reset_at|reset_after_seconds, ... }
+  // }
+  // Fallback shape:
+  // { usage_windows: [{ window_type: 'primary'|'secondary', utilization, resets_at }] }
+
+  const clampPercent = (value: unknown): number | undefined => {
+    const numeric = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+    if (!Number.isFinite(numeric)) return undefined
+    return Math.max(0, Math.min(100, numeric))
+  }
+
+  const normalizeResetsAt = (resetAt: unknown, resetAfterSeconds: unknown): string | null => {
+    if (typeof resetAt === 'string' && resetAt) return resetAt
+    if (typeof resetAt === 'number' && Number.isFinite(resetAt)) {
+      // API usually returns Unix seconds.
+      const ms = resetAt > 1e12 ? resetAt : resetAt * 1000
+      return new Date(ms).toISOString()
+    }
+    if (typeof resetAfterSeconds === 'number' && Number.isFinite(resetAfterSeconds)) {
+      return new Date(Date.now() + resetAfterSeconds * 1000).toISOString()
+    }
+    return null
+  }
+
+  const extractUsedWindow = (window: unknown): UsageTimePeriod | undefined => {
+    if (!window || typeof window !== 'object') return undefined
+    const record = window as Record<string, unknown>
+    const usedPercent = clampPercent(record.used_percent ?? record.user_percent)
+    if (usedPercent === undefined) return undefined
+    return {
+      utilization: usedPercent,
+      resets_at: normalizeResetsAt(record.reset_at, record.reset_after_seconds),
+    }
+  }
+
+  // Legacy fallback where utilization appears to represent remaining capacity.
+  const toUsedPercent = (value: unknown): number | undefined => {
+    const numeric = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+    if (!Number.isFinite(numeric)) return undefined
+    const pct = numeric <= 1 ? numeric * 100 : numeric
+    return Math.max(0, Math.min(100, 100 - pct))
+  }
+
+  const findWindowRoot = (input: unknown): Record<string, unknown> | null => {
+    if (!input || typeof input !== 'object') return null
+    const seen = new Set<unknown>()
+    const queue: Array<{ value: unknown; depth: number }> = [{ value: input, depth: 0 }]
+    while (queue.length > 0) {
+      const current = queue.shift()
+      if (!current) continue
+      const { value, depth } = current
+      if (!value || typeof value !== 'object' || seen.has(value) || depth > 3) continue
+      seen.add(value)
+      const record = value as Record<string, unknown>
+      if (record.primary_window || record.secondary_window || record.usage_windows) {
+        return record
+      }
+      for (const child of Object.values(record)) {
+        if (child && typeof child === 'object') {
+          queue.push({ value: child, depth: depth + 1 })
+        }
+      }
+    }
+    return null
+  }
+
+  const root = findWindowRoot(raw) ?? raw
+
+  const primary = extractUsedWindow(root.primary_window)
+  const secondary = extractUsedWindow(root.secondary_window)
+  if (primary) result.five_hour = primary
+  if (secondary) result.seven_day = secondary
+  if (primary || secondary) return result
+
+  // Also handle flat fields as fallback
+  const windows = root.usage_windows as Array<Record<string, unknown>> | undefined
+
+  if (Array.isArray(windows)) {
+    for (const w of windows) {
+      const utilization = clampPercent(w.used_percent ?? w.user_percent) ?? toUsedPercent(w.utilization)
+      const resets_at = normalizeResetsAt(w.resets_at ?? w.reset_at, w.reset_after_seconds)
+      if (w.window_type === 'primary' || w.window_type === '5h') {
+        result.five_hour = { utilization, resets_at }
+      } else if (w.window_type === 'secondary' || w.window_type === 'weekly' || w.window_type === '7d') {
+        result.seven_day = { utilization, resets_at }
+      }
+    }
+  } else {
+    // Flat fallback — try common field names
+    const sessionUtil = root.session_utilization ?? root.five_hour_utilization
+    const weeklyUtil = root.weekly_utilization ?? root.seven_day_utilization
+    const normalizedSession = toUsedPercent(sessionUtil)
+    const normalizedWeekly = toUsedPercent(weeklyUtil)
+    if (normalizedSession !== undefined) {
+      result.five_hour = {
+        utilization: normalizedSession,
+        resets_at: (root.session_resets_at as string | null) ?? null,
+      }
+    }
+    if (normalizedWeekly !== undefined) {
+      result.seven_day = {
+        utilization: normalizedWeekly,
+        resets_at: (root.weekly_resets_at as string | null) ?? null,
+      }
+    }
+  }
+
+  return result
+}
+
+const CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
+const CODEX_TOKEN_COOKIES = ['__Secure-next-auth.session-token', 'next-auth.session-token']
+
+type CodexAuthAttempt = { kind: 'bearer' } | { kind: 'cookie'; cookieName: string }
+
+function normalizeBearerToken(token: string): string {
+  return token.replace(/^Bearer\s+/i, '').trim()
+}
+
+function extractCodexAccessTokenFromAuthJson(parsed: Record<string, unknown>): string | null {
+  const direct = parsed.access_token ?? parsed.accessToken
+  if (typeof direct === 'string' && direct.trim()) return direct
+
+  const tokens = parsed.tokens
+  if (tokens && typeof tokens === 'object') {
+    const tokenRecord = tokens as Record<string, unknown>
+    const nested = tokenRecord.access_token ?? tokenRecord.accessToken
+    if (typeof nested === 'string' && nested.trim()) return nested
+  }
+
+  return null
+}
+
+function buildCodexAuthAttempts(preferredCookieName?: string): CodexAuthAttempt[] {
+  const attempts: CodexAuthAttempt[] = []
+  if (preferredCookieName) {
+    attempts.push({ kind: 'cookie', cookieName: preferredCookieName })
+  }
+  attempts.push({ kind: 'bearer' })
+  for (const cookieName of CODEX_TOKEN_COOKIES) {
+    if (cookieName !== preferredCookieName) {
+      attempts.push({ kind: 'cookie', cookieName })
+    }
+  }
+  return attempts
+}
+
+async function fetchCodexUsageResponse(
+  accessToken: string,
+  preferredCookieName?: string,
+): Promise<{ response: Response; auth: CodexAuthAttempt }> {
+  const normalizedToken = normalizeBearerToken(accessToken)
+
+  for (const attempt of buildCodexAuthAttempts(preferredCookieName)) {
+    let response: Response
+    if (attempt.kind === 'bearer') {
+      response = await session.defaultSession.fetch(CODEX_USAGE_URL, {
+        credentials: 'include',
+        headers: {
+          Authorization: `Bearer ${normalizedToken}`,
+          'User-Agent': USER_AGENT,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+      })
+      debugLog(`Codex usage fetch attempt bearer => ${response.status}`)
+    } else {
+      await setCodexCookie(attempt.cookieName, normalizedToken)
+      response = await session.defaultSession.fetch(CODEX_USAGE_URL, {
+        credentials: 'include',
+        headers: {
+          'User-Agent': USER_AGENT,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+      })
+      debugLog(`Codex usage fetch attempt cookie:${attempt.cookieName} => ${response.status}`)
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      continue
+    }
+
+    return { response, auth: attempt }
+  }
+
+  throw new Error('CodexSessionExpired')
+}
+
+ipcMain.handle(IpcChannels.GET_CODEX_CREDENTIALS, () => {
+  return {
+    accessToken: store.get('codexAccessToken') ?? null,
+  }
+})
+
+ipcMain.handle(
+  IpcChannels.SAVE_CODEX_CREDENTIALS,
+  (
+    _event: Electron.IpcMainInvokeEvent,
+    payload: string | { accessToken: string; cookieName?: string },
+  ) => {
+    const rawToken = typeof payload === 'string' ? payload : payload.accessToken
+    const cookieName = typeof payload === 'string' ? undefined : payload.cookieName
+    const accessToken = rawToken?.trim()
+    if (!accessToken) {
+      throw new Error('Missing Codex credentials')
+    }
+    store.set('codexAccessToken', accessToken)
+    if (cookieName) {
+      store.set('codexCookieName', cookieName)
+      void setCodexCookie(cookieName, accessToken).catch((err) =>
+        debugLog('Failed to pre-set Codex cookie during save:', (err as Error).message),
+      )
+    } else {
+      store.delete('codexCookieName' as keyof StoreSchema)
+    }
+    return true
+  },
+)
+
+ipcMain.handle(IpcChannels.DELETE_CODEX_CREDENTIALS, () => {
+  store.delete('codexAccessToken' as keyof StoreSchema)
+  store.delete('codexCookieName' as keyof StoreSchema)
+  store.delete('cachedCodexUsageData' as keyof StoreSchema)
+  store.delete('cachedCodexUsageTimestamp' as keyof StoreSchema)
+  return true
+})
+
+// Auto-detect Codex token: try ~/.codex/auth.json first, then open chatgpt.com
+ipcMain.handle(IpcChannels.DETECT_CODEX_TOKEN, async () => {
+  // 1. Try reading from ~/.codex/auth.json
+  try {
+    const authPath = path.join(os.homedir(), '.codex', 'auth.json')
+    if (fs.existsSync(authPath)) {
+      const raw = fs.readFileSync(authPath, 'utf-8')
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      const token = extractCodexAccessTokenFromAuthJson(parsed)
+      if (typeof token === 'string' && token.length > 10) {
+        try {
+          await fetchCodexUsageResponse(token)
+          debugLog('Codex bearer token from ~/.codex/auth.json is valid')
+          return { success: true, accessToken: token }
+        } catch (err) {
+          debugLog('Codex token in ~/.codex/auth.json is invalid/expired, falling back to login window:', (err as Error).message)
+        }
+      }
+    }
+  } catch (err) {
+    debugLog('Could not read ~/.codex/auth.json:', (err as Error).message)
+  }
+
+  // 2. Fallback: open chatgpt.com and listen for auth cookie
+  return new Promise((resolve) => {
+    const loginWin = new BrowserWindow({
+      width: 1000,
+      height: 700,
+      title: 'Log in to ChatGPT (Codex)',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    })
+
+    let resolved = false
+
+    const onCookieChanged = (
+      _event: Electron.Event,
+      cookie: Electron.Cookie,
+      _cause: string,
+      removed: boolean,
+    ): void => {
+      if (
+        !removed &&
+        cookie.value &&
+        cookie.domain?.includes('chatgpt.com') &&
+        CODEX_TOKEN_COOKIES.includes(cookie.name)
+      ) {
+        resolved = true
+        session.defaultSession.cookies.removeListener('changed', onCookieChanged)
+        store.set('codexCookieName', cookie.name)
+        loginWin.close()
+        resolve({ success: true, accessToken: cookie.value, cookieName: cookie.name })
+      }
+    }
+
+    session.defaultSession.cookies.on('changed', onCookieChanged)
+
+    loginWin.on('closed', () => {
+      session.defaultSession.cookies.removeListener('changed', onCookieChanged)
+      if (!resolved) {
+        resolve({ success: false, error: 'Login window closed' })
+      }
+    })
+
+    loginWin.loadURL('https://chatgpt.com/login')
+  })
+})
+
+ipcMain.handle(IpcChannels.FETCH_CODEX_USAGE, async () => {
+  const accessToken = store.get('codexAccessToken') as string | undefined
+  if (!accessToken) {
+    throw new Error('Missing Codex credentials')
+  }
+
+  try {
+    const preferredCookieName = store.get('codexCookieName') as string | undefined
+    const { response, auth } = await fetchCodexUsageResponse(accessToken, preferredCookieName)
+
+    if (!response.ok) {
+      throw new Error(`CodexUsageFetchFailed:${response.status}`)
+    }
+
+    if (auth.kind === 'cookie') {
+      store.set('codexCookieName', auth.cookieName)
+    }
+
+    const raw = (await response.json()) as Record<string, unknown>
+    debugLogToRenderer('Raw Codex usage API response:', raw)
+
+    const data = parseCodexUsageResponse(raw)
+    store.set('cachedCodexUsageData', data)
+    store.set('cachedCodexUsageTimestamp', Date.now())
+    return data
+  } catch (error) {
+    const err = error as Error
+    if (err.message === 'CodexSessionExpired') {
+      store.delete('codexAccessToken' as keyof StoreSchema)
+      store.delete('codexCookieName' as keyof StoreSchema)
+      if (mainWindow) {
+        mainWindow.webContents.send(IpcChannels.CODEX_SESSION_EXPIRED)
+      }
+      throw err
+    }
+    console.error('Codex usage fetch failed:', err.message)
+    throw err
+  }
+})
+
+ipcMain.handle(IpcChannels.GET_CACHED_CODEX_USAGE, (): CachedCodexUsageData | null => {
+  const data = store.get('cachedCodexUsageData') as CodexUsageData | undefined
+  const timestamp = store.get('cachedCodexUsageTimestamp') as number | undefined
   if (!data || !timestamp) return null
   return { data, timestamp }
 })
@@ -651,6 +1091,11 @@ app.whenReady().then(async () => {
   const sessionKey = store.get('sessionKey') as string | undefined
   if (sessionKey) {
     await setSessionCookie(sessionKey)
+  }
+  const codexAccessToken = store.get('codexAccessToken') as string | undefined
+  const codexCookieName = store.get('codexCookieName') as string | undefined
+  if (codexAccessToken && codexCookieName) {
+    await setCodexCookie(codexCookieName, codexAccessToken)
   }
 
   createMainWindow()

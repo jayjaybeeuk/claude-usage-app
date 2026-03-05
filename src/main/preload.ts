@@ -49,6 +49,8 @@ const api = {
     opus?: number
     cowork?: number
     oauthApps?: number
+    codexSession?: number
+    codexWeekly?: number
   }) =>
     ipcRenderer.invoke('save-usage-history-entry', entry),
   clearUsageHistory: () => ipcRenderer.invoke('clear-usage-history'),
@@ -60,6 +62,18 @@ const api = {
   // Platform info
   getPlatform: () => ipcRenderer.invoke('get-platform'),
   platform: process.platform,
+
+  // Codex
+  getCodexCredentials: () => ipcRenderer.invoke('get-codex-credentials'),
+  saveCodexCredentials: (credentials: { accessToken: string; cookieName?: string }) =>
+    ipcRenderer.invoke('save-codex-credentials', credentials),
+  deleteCodexCredentials: () => ipcRenderer.invoke('delete-codex-credentials'),
+  detectCodexToken: () => ipcRenderer.invoke('detect-codex-token'),
+  fetchCodexUsageData: () => ipcRenderer.invoke('fetch-codex-usage'),
+  getCachedCodexUsage: () => ipcRenderer.invoke('get-cached-codex-usage'),
+  onCodexSessionExpired: (callback: () => void) => {
+    ipcRenderer.on('codex-session-expired', () => callback())
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

@@ -1,7 +1,7 @@
 {
-  "name": "claude-usage-app",
+  "name": "agent-usage",
   "version": "1.3.2",
-  "description": "Desktop widget for Claude.ai usage monitoring",
+  "description": "Desktop widget for agent usage monitoring",
   "main": "dist-main/main/main.js",
   "scripts": {
     "dev": "concurrently -n tsc,vite,electron -c blue,green,yellow \"npm run dev:main\" \"npm run dev:renderer\" \"npm run dev:electron\"",
@@ -57,7 +57,7 @@
   },
   "build": {
     "appId": "com.claudeusage.widget",
-    "productName": "Claude Usage App",
+    "productName": "Agent Usage",
     "directories": {
       "output": "dist"
     },
