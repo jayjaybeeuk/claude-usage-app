@@ -86,6 +86,7 @@ export interface CodexCredentials {
 export interface DetectCodexResult {
   success: boolean
   accessToken?: string
+  cookieName?: string
   error?: string
 }
 
