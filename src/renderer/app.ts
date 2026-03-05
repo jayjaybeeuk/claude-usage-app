@@ -101,9 +101,8 @@ const elements = {
   pieToggleBtn: getElement<HTMLButtonElement>('pieToggleBtn'),
   pieSection: getElement<HTMLDivElement>('pieSection'),
   pieChart: getElement<HTMLCanvasElement>('pieChart'),
+  extraUsageToggleBtn: getElement<HTMLButtonElement>('extraUsageToggleBtn'),
 
-  expandToggle: getElement<HTMLDivElement>('expandToggle'),
-  expandArrow: getElement<SVGElement>('expandArrow'),
   expandSection: getElement<HTMLDivElement>('expandSection'),
   extraRows: getElement<HTMLDivElement>('extraRows'),
 
@@ -289,10 +288,10 @@ function setupEventListeners(): void {
     resizeWidget()
   })
 
-  // Expand/collapse toggle
-  elements.expandToggle.addEventListener('click', () => {
+  // Extra usage toggle
+  elements.extraUsageToggleBtn.addEventListener('click', () => {
     isExpanded = !isExpanded
-    elements.expandArrow.classList.toggle('expanded', isExpanded)
+    elements.extraUsageToggleBtn.classList.toggle('active', isExpanded)
     elements.expandSection.style.display = isExpanded ? 'block' : 'none'
     resizeWidget()
   })
@@ -600,6 +599,13 @@ const EXTRA_ROW_CONFIG: Record<string, ExtraRowConfig> = {
 function buildExtraRows(data: UsageData): number {
   elements.extraRows.innerHTML = ''
   let count = 0
+  const formatGBP = (cents: number): string =>
+    new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: 'GBP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(cents / 100)
 
   for (const [key, config] of Object.entries(EXTRA_ROW_CONFIG)) {
     const value = data[key] as (UsageTimePeriod & ExtraUsage) | undefined
@@ -619,18 +625,18 @@ function buildExtraRows(data: UsageData): number {
       const extraValue = value as ExtraUsage
       // Percentage area → spending amounts
       if (extraValue.used_cents != null && extraValue.limit_cents != null) {
-        const usedDollars = (extraValue.used_cents / 100).toFixed(0)
-        const limitDollars = (extraValue.limit_cents / 100).toFixed(0)
-        percentageHTML = `<span class="usage-percentage extra-spending">$${usedDollars}/$${limitDollars}</span>`
+        const usedAmount = formatGBP(extraValue.used_cents)
+        const limitAmount = formatGBP(extraValue.limit_cents)
+        percentageHTML = `<span class="usage-percentage extra-spending">${usedAmount}/${limitAmount}</span>`
       } else {
         percentageHTML = `<span class="usage-percentage">${Math.round(utilization)}%</span>`
       }
       // Timer area → prepaid balance
       if (extraValue.balance_cents != null) {
-        const balanceDollars = (extraValue.balance_cents / 100).toFixed(0)
+        const balanceAmount = formatGBP(extraValue.balance_cents)
         timerHTML = `
                     <div class="timer-container">
-                        <span class="timer-text extra-balance">Bal $${balanceDollars}</span>
+                        <span class="timer-text extra-balance">Bal ${balanceAmount}</span>
                     </div>
                 `
       } else {
@@ -674,10 +680,10 @@ function buildExtraRows(data: UsageData): number {
   }
 
   // Hide toggle if no extra rows
-  elements.expandToggle.style.display = count > 0 ? 'flex' : 'none'
+  elements.extraUsageToggleBtn.style.display = count > 0 ? 'flex' : 'none'
   if (count === 0 && isExpanded) {
     isExpanded = false
-    elements.expandArrow.classList.remove('expanded')
+    elements.extraUsageToggleBtn.classList.remove('active')
     elements.expandSection.style.display = 'none'
   }
 

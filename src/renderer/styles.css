@@ -469,13 +469,13 @@ body.platform-darwin .title-bar {
 /* Expandable Section */
 .expand-section {
     border-top: 1px solid rgba(255, 255, 255, 0.05);
-    margin-top: 6px;
-    padding-top: 6px;
+    padding: 6px 0;
 }
 
 .expand-section .usage-section {
     height: 28px;
     margin-bottom: 0;
+    grid-template-columns: 125px 1fr 45px 100px;
 }
 
 .expand-section .usage-label {
@@ -644,6 +644,8 @@ body.platform-darwin .title-bar {
     font-size: 10px;
     color: #10b981;
     opacity: 0.8;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 .timer-text.extra-balance {
@@ -943,6 +945,33 @@ body.platform-darwin .title-bar {
     transition: all 0.2s ease;
 }
 
+.extra-toggle-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: #505050;
+    width: 22px;
+    height: 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.extra-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #d2a74f;
+}
+
+.extra-toggle-btn.active {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+}
+
 .graph-toggle-btn:hover {
     background: rgba(255, 255, 255, 0.1);
     color: #a0a0a0;
@@ -1022,13 +1051,13 @@ body.platform-darwin .title-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 4px 16px 2px;
+    padding: 10px 16px 2px;
     gap: 8px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .service-divider-label {
-    font-size: 9px;
+    font-size: 13px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.8px;

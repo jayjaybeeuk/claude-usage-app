@@ -616,22 +616,57 @@ ipcMain.handle(IpcChannels.FETCH_USAGE_DATA, async () => {
   const data = usageResult.value as UsageData
   debugLogToRenderer('Raw usage API response:', data)
 
+  const toNumber = (value: unknown): number | undefined => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string') {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+    return undefined
+  }
+
+  const normalizeExtraUsage = (source: Record<string, unknown> | undefined): ExtraUsage | undefined => {
+    if (!source) return undefined
+    const limit = toNumber(source.monthly_limit ?? source.monthly_credit_limit ?? source.spend_limit_amount_cents ?? source.limit_cents)
+    const used = toNumber(source.used_credits ?? source.used_credit ?? source.used_cents ?? source.balance_cents)
+    const utilization = toNumber(source.utilization)
+    const enabled = source.is_enabled !== undefined ? Boolean(source.is_enabled) : limit != null
+
+    if (!enabled || typeof limit !== 'number' || limit <= 0 || typeof used !== 'number' || used < 0) {
+      return undefined
+    }
+
+    return {
+      utilization: utilization ?? (used / limit) * 100,
+      resets_at: null,
+      used_cents: used,
+      limit_cents: limit,
+    } satisfies ExtraUsage
+  }
+
+  // Prefer spending values already present in the primary usage response.
+  const usageExtraSource =
+    data.extra_usage && typeof data.extra_usage === 'object' ? (data.extra_usage as unknown as Record<string, unknown>) : undefined
+  const normalizedFromUsage = normalizeExtraUsage(usageExtraSource)
+  if (normalizedFromUsage) {
+    data.extra_usage = {
+      ...(data.extra_usage ?? {}),
+      ...normalizedFromUsage,
+    }
+  }
+
   // Merge overage spending data into data.extra_usage
   if (overageResult.status === 'fulfilled' && overageResult.value) {
     const overage = overageResult.value as Record<string, unknown>
     debugLogToRenderer('Raw overage API response:', overage)
-    const limit = (overage.monthly_credit_limit ?? overage.spend_limit_amount_cents) as number | undefined
-    const used = (overage.used_credits ?? overage.balance_cents) as number | undefined
-    const enabled =
-      overage.is_enabled !== undefined ? (overage.is_enabled as boolean) : limit != null
-
-    if (enabled && typeof limit === 'number' && limit > 0 && typeof used === 'number') {
+    const normalizedFromOverage = normalizeExtraUsage(overage)
+    const hasUsageSpending = data.extra_usage?.used_cents != null && data.extra_usage?.limit_cents != null
+    // Only fall back to overage API if usage response did not include spending fields.
+    if (!hasUsageSpending && normalizedFromOverage) {
       data.extra_usage = {
-        utilization: (used / limit) * 100,
-        resets_at: null,
-        used_cents: used,
-        limit_cents: limit,
-      } satisfies ExtraUsage
+        ...(data.extra_usage ?? {}),
+        ...normalizedFromOverage,
+      }
     }
   } else if (overageResult.status === 'rejected') {
     debugLog('Overage fetch skipped or failed:', (overageResult.reason as Error)?.message || 'no data')

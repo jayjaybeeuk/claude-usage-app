@@ -162,6 +162,7 @@
                 <div class="status-bar" id="statusBar">
                     <span class="status-text" id="statusText">Refreshed just now</span>
                     <div class="status-actions">
+                        <button class="extra-toggle-btn" id="extraUsageToggleBtn" title="Toggle extra usage">£</button>
                         <button class="graph-toggle-btn" id="graphToggleBtn" title="Toggle usage graph">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
@@ -187,13 +188,6 @@
                 <div class="pie-section" id="pieSection" style="display: none;">
                     <div class="chart-subtitle">Claude Usage Breakdown</div>
                     <canvas id="pieChart" width="440" height="140"></canvas>
-                </div>
-
-                <!-- Expand Toggle -->
-                <div class="expand-toggle" id="expandToggle">
-                    <svg class="expand-arrow" id="expandArrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="6 9 12 15 18 9" />
-                    </svg>
                 </div>
 
                 <!-- Expandable Details -->
