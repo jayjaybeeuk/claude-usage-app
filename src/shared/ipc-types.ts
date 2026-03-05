@@ -48,6 +48,8 @@ export interface UsageHistoryEntry {
   opus?: number
   cowork?: number
   oauthApps?: number
+  codexSession?: number
+  codexWeekly?: number
 }
 
 export interface UsageTimePeriod {
@@ -81,6 +83,11 @@ export interface CachedUsageData {
 
 export interface CodexCredentials {
   accessToken: string | null
+}
+
+export interface SaveCodexCredentialsPayload {
+  accessToken: string
+  cookieName?: string
 }
 
 export interface DetectCodexResult {
@@ -127,7 +134,7 @@ export interface ElectronAPI {
   platform: string
   // Codex
   getCodexCredentials: () => Promise<CodexCredentials>
-  saveCodexCredentials: (accessToken: string) => Promise<boolean>
+  saveCodexCredentials: (credentials: SaveCodexCredentialsPayload) => Promise<boolean>
   deleteCodexCredentials: () => Promise<boolean>
   detectCodexToken: () => Promise<DetectCodexResult>
   fetchCodexUsageData: () => Promise<CodexUsageData>

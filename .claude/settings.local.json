@@ -18,7 +18,8 @@
       "Bash(done)",
       "Bash(chmod:*)",
       "Bash(npm run generate-icons:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(node:*)"
     ]
   }
 }

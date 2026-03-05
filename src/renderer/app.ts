@@ -24,11 +24,19 @@ const SONNET_ROW_HEIGHT = 30 // sonnet row height
 let lastNonSettingsHeight = WIDGET_HEIGHT_COLLAPSED
 
 // Codex state
-let codexVisible = false
 let codexHasData = false
 let latestCodexData: CodexUsageData | null = null
 let codexCountdownInterval: ReturnType<typeof setInterval> | null = null
-const CODEX_SECTION_HEIGHT = 28 + 32 + 32 // divider + 2 usage rows
+let isCodexGraphVisible = false
+let isCodexPieVisible = false
+let codexLastRefreshTime: number | null = null
+let codexStatusInterval: ReturnType<typeof setInterval> | null = null
+const CODEX_SECTION_BASE_HEIGHT = 28 + 32 + 32 // divider + 2 usage rows
+const CODEX_LOGIN_HEIGHT = CODEX_SECTION_BASE_HEIGHT + 20
+const CODEX_GRAPH_HEIGHT = 170
+const CODEX_PIE_HEIGHT = 162
+const CODEX_STATUS_HEIGHT = 34
+const WIDGET_HEIGHT_BUFFER = 8
 
 // Debug logging — only shows in DevTools (development mode).
 // Regular users won't see verbose logs in production.
@@ -46,6 +54,8 @@ function getElement<T extends Element = HTMLElement>(id: string): T {
 
 // DOM elements
 const elements = {
+  widgetContainer: getElement<HTMLDivElement>('widgetContainer'),
+  titleBar: getElement<HTMLDivElement>('titleBar'),
   loadingContainer: getElement<HTMLDivElement>('loadingContainer'),
   loginContainer: getElement<HTMLDivElement>('loginContainer'),
   noUsageContainer: getElement<HTMLDivElement>('noUsageContainer'),
@@ -109,7 +119,6 @@ const elements = {
   refreshIntervalValue: getElement<HTMLSpanElement>('refreshIntervalValue'),
 
   // Codex
-  codexToggleBtn: getElement<HTMLButtonElement>('codexToggleBtn'),
   codexSection: getElement<HTMLDivElement>('codexSection'),
   codexLoginContainer: getElement<HTMLDivElement>('codexLoginContainer'),
   codexContent: getElement<HTMLDivElement>('codexContent'),
@@ -121,7 +130,13 @@ const elements = {
   codexTokenError: getElement<HTMLParagraphElement>('codexTokenError'),
   codexBackBtn: getElement<HTMLButtonElement>('codexBackBtn'),
   codexLoginError: getElement<HTMLParagraphElement>('codexLoginError'),
-  codexLogoutBtn: getElement<HTMLButtonElement>('codexLogoutBtn'),
+  codexStatusText: getElement<HTMLSpanElement>('codexStatusText'),
+  codexGraphToggleBtn: getElement<HTMLButtonElement>('codexGraphToggleBtn'),
+  codexGraphSection: getElement<HTMLDivElement>('codexGraphSection'),
+  codexUsageChart: getElement<HTMLCanvasElement>('codexUsageChart'),
+  codexPieToggleBtn: getElement<HTMLButtonElement>('codexPieToggleBtn'),
+  codexPieSection: getElement<HTMLDivElement>('codexPieSection'),
+  codexPieChart: getElement<HTMLCanvasElement>('codexPieChart'),
 
   codexSessionProgress: getElement<HTMLDivElement>('codexSessionProgress'),
   codexSessionPercentage: getElement<HTMLSpanElement>('codexSessionPercentage'),
@@ -162,6 +177,11 @@ async function loadRefreshInterval(): Promise<void> {
   updateRefreshIntervalUI(refreshIntervalMinutes)
 }
 
+async function refreshAllUsageData(): Promise<void> {
+  await fetchUsageData()
+  await fetchCodexUsageData()
+}
+
 async function setRefreshIntervalMinutes(minutes: number): Promise<void> {
   const clamped = clampRefreshMinutes(minutes)
   const stored = await window.electronAPI.setRefreshIntervalMinutes(clamped)
@@ -190,7 +210,8 @@ async function init(): Promise<void> {
 
   if (credentials.sessionKey && credentials.organizationId) {
     showMainContent()
-    await fetchUsageData()
+    await initCodexSection()
+    await refreshAllUsageData()
     startAutoUpdate()
   } else {
     showLoginRequired()
@@ -231,8 +252,11 @@ function setupEventListeners(): void {
   elements.refreshBtn.addEventListener('click', async () => {
     debugLog('Refresh button clicked')
     elements.refreshBtn.classList.add('spinning')
-    await fetchUsageData()
-    elements.refreshBtn.classList.remove('spinning')
+    try {
+      await refreshAllUsageData()
+    } finally {
+      elements.refreshBtn.classList.remove('spinning')
+    }
   })
 
   elements.minimizeBtn.addEventListener('click', () => {
@@ -315,6 +339,9 @@ function setupEventListeners(): void {
     if (isGraphVisible) {
       renderUsageChart()
     }
+    if (isCodexGraphVisible) {
+      renderCodexUsageChart()
+    }
   })
 
   elements.coffeeBtn.addEventListener('click', () => {
@@ -327,7 +354,7 @@ function setupEventListeners(): void {
 
   // Listen for refresh requests from tray
   window.electronAPI.onRefreshUsage(async () => {
-    await fetchUsageData()
+    await refreshAllUsageData()
   })
 
   // Listen for session expiration events (403 errors)
@@ -341,9 +368,6 @@ function setupEventListeners(): void {
   window.electronAPI.onDebugLog((label: string, data: unknown) => {
     console.log('[Debug]', label, data)
   })
-
-  // Codex toggle
-  elements.codexToggleBtn.addEventListener('click', toggleCodexSection)
 
   // Codex login flow
   elements.codexAutoDetectBtn.addEventListener('click', handleCodexAutoDetect)
@@ -364,11 +388,24 @@ function setupEventListeners(): void {
     if (e.key === 'Enter') handleCodexManualToken()
     elements.codexTokenError.textContent = ''
   })
-  elements.codexLogoutBtn.addEventListener('click', async () => {
-    await window.electronAPI.deleteCodexCredentials()
-    latestCodexData = null
-    codexHasData = false
-    showCodexLogin()
+
+  elements.codexGraphToggleBtn.addEventListener('click', () => {
+    isCodexGraphVisible = !isCodexGraphVisible
+    elements.codexGraphSection.style.display = isCodexGraphVisible ? 'block' : 'none'
+    elements.codexGraphToggleBtn.classList.toggle('active', isCodexGraphVisible)
+    if (isCodexGraphVisible) {
+      renderCodexUsageChart()
+    }
+    resizeWidget()
+  })
+
+  elements.codexPieToggleBtn.addEventListener('click', () => {
+    isCodexPieVisible = !isCodexPieVisible
+    elements.codexPieSection.style.display = isCodexPieVisible ? 'block' : 'none'
+    elements.codexPieToggleBtn.classList.toggle('active', isCodexPieVisible)
+    if (isCodexPieVisible) {
+      renderCodexPieChart()
+    }
     resizeWidget()
   })
 
@@ -376,10 +413,8 @@ function setupEventListeners(): void {
     debugLog('Codex session expired')
     latestCodexData = null
     codexHasData = false
-    if (codexVisible) {
-      showCodexLogin()
-      resizeWidget()
-    }
+    showCodexLogin()
+    resizeWidget()
   })
 }
 
@@ -402,7 +437,8 @@ async function handleConnect(): Promise<void> {
       await window.electronAPI.saveCredentials({ sessionKey, organizationId: result.organizationId })
       elements.sessionKeyInput.value = ''
       showMainContent()
-      await fetchUsageData()
+      await initCodexSection()
+      await refreshAllUsageData()
       startAutoUpdate()
     } else {
       elements.sessionKeyError.textContent = result.error || 'Invalid session key'
@@ -442,7 +478,8 @@ async function handleAutoDetect(): Promise<void> {
         organizationId: validation.organizationId,
       })
       showMainContent()
-      await fetchUsageData()
+      await initCodexSection()
+      await refreshAllUsageData()
       startAutoUpdate()
     } else {
       elements.autoDetectError.textContent = 'Session invalid. Try again or use Manual →'
@@ -486,6 +523,8 @@ async function fetchUsageData(): Promise<void> {
       opus: data.seven_day_opus?.utilization,
       cowork: data.seven_day_cowork?.utilization,
       oauthApps: data.seven_day_oauth_apps?.utilization,
+      codexSession: latestCodexData?.five_hour?.utilization,
+      codexWeekly: latestCodexData?.seven_day?.utilization,
     }
     await window.electronAPI.saveUsageHistoryEntry(historyEntry)
 
@@ -506,6 +545,9 @@ async function fetchUsageData(): Promise<void> {
     // Refresh pie chart if visible
     if (isPieVisible) {
       renderPieChart()
+    }
+    if (isCodexGraphVisible) {
+      renderCodexUsageChart()
     }
   } catch (error) {
     console.error('Error fetching usage data:', error)
@@ -657,6 +699,14 @@ function refreshExtraTimers(): void {
 }
 
 function resizeWidget(): void {
+  if (elements.mainContent.style.display === 'none') {
+    lastNonSettingsHeight = WIDGET_HEIGHT_COLLAPSED
+    if (!isSettingsOpen) {
+      window.electronAPI.resizeWindow(WIDGET_HEIGHT_COLLAPSED)
+    }
+    return
+  }
+
   let height = WIDGET_HEIGHT_COLLAPSED
 
   // Add Sonnet row if visible
@@ -681,13 +731,24 @@ function resizeWidget(): void {
     height += 12 + extraCount * WIDGET_ROW_HEIGHT
   }
 
-  // Add Codex section if visible and has data
-  if (codexVisible && codexHasData) {
-    height += CODEX_SECTION_HEIGHT
-  } else if (codexVisible && !codexHasData) {
-    // Login UI is taller
-    height += CODEX_SECTION_HEIGHT + 20
+  // Codex section is always visible on the same page
+  if (codexHasData) {
+    height += CODEX_SECTION_BASE_HEIGHT + CODEX_STATUS_HEIGHT
+    if (isCodexGraphVisible) {
+      height += CODEX_GRAPH_HEIGHT
+    }
+    if (isCodexPieVisible) {
+      height += CODEX_PIE_HEIGHT
+    }
+  } else {
+    height += CODEX_LOGIN_HEIGHT
   }
+
+  // Ensure window is never smaller than actual rendered content (and can still retract).
+  const titleBarHeight = Math.ceil(elements.titleBar.getBoundingClientRect().height)
+  const mainContentHeight = Math.ceil(elements.mainContent.scrollHeight)
+  const measuredHeight = titleBarHeight + mainContentHeight + WIDGET_HEIGHT_BUFFER
+  height = Math.max(height + WIDGET_HEIGHT_BUFFER, measuredHeight)
 
   lastNonSettingsHeight = height
   if (!isSettingsOpen) {
@@ -697,11 +758,6 @@ function resizeWidget(): void {
 
 function updateUI(data: UsageData): void {
   latestUsageData = data
-
-  if (hasNoUsage(data)) {
-    showNoUsage()
-    return
-  }
 
   showMainContent()
 
@@ -908,6 +964,8 @@ function showLoginRequired(): void {
     clearInterval(statusInterval)
     statusInterval = null
   }
+  stopCodexCountdown()
+  stopCodexStatusTimer()
 }
 
 function showNoUsage(): void {
@@ -928,7 +986,7 @@ function showMainContent(): void {
 function startAutoUpdate(): void {
   stopAutoUpdate()
   updateInterval = setInterval(() => {
-    fetchUsageData()
+    refreshAllUsageData()
   }, refreshIntervalMinutes * 60 * 1000)
 }
 
@@ -994,36 +1052,67 @@ function startStatusTimer(): void {
   statusInterval = setInterval(updateStatusText, 30000) // update every 30s
 }
 
-// ─── Codex Functions ──────────────────────────────────────────────────────────
-
-function toggleCodexSection(): void {
-  codexVisible = !codexVisible
-  elements.codexSection.style.display = codexVisible ? 'block' : 'none'
-  elements.codexToggleBtn.classList.toggle('active', codexVisible)
-  if (codexVisible) {
-    initCodexSection()
-  } else {
-    stopCodexCountdown()
+function updateCodexStatusText(): void {
+  if (!codexLastRefreshTime) {
+    elements.codexStatusText.textContent = 'Refreshed just now'
+    return
   }
-  resizeWidget()
+  const elapsed = Date.now() - codexLastRefreshTime
+  const minutes = Math.floor(elapsed / 60000)
+  if (minutes < 1) {
+    elements.codexStatusText.textContent = 'Refreshed just now'
+  } else if (minutes === 1) {
+    elements.codexStatusText.textContent = 'Refreshed 1 minute ago'
+  } else {
+    elements.codexStatusText.textContent = `Refreshed ${minutes} minutes ago`
+  }
 }
+
+function startCodexStatusTimer(): void {
+  stopCodexStatusTimer()
+  codexStatusInterval = setInterval(updateCodexStatusText, 30000)
+}
+
+function stopCodexStatusTimer(): void {
+  if (codexStatusInterval) {
+    clearInterval(codexStatusInterval)
+    codexStatusInterval = null
+  }
+}
+
+// ─── Codex Functions ──────────────────────────────────────────────────────────
 
 async function initCodexSection(): Promise<void> {
   const creds = await window.electronAPI.getCodexCredentials()
   if (creds.accessToken) {
-    await fetchCodexUsageData()
+    // Reserve Codex space immediately to avoid visible layout jump while data loads.
+    showCodexContent()
+    updateCodexUI(latestCodexData ?? {})
+    elements.codexStatusText.textContent = 'Refreshing...'
+    resizeWidget()
   } else {
     showCodexLogin()
+    resizeWidget()
   }
 }
 
 function showCodexLogin(): void {
+  codexHasData = false
   elements.codexLoginContainer.style.display = 'block'
   elements.codexContent.style.display = 'none'
   elements.codexManualInput.style.display = 'none'
   elements.codexAutoDetectBtn.style.display = ''
   elements.codexManualBtn.style.display = ''
   elements.codexLoginError.textContent = ''
+  isCodexGraphVisible = false
+  isCodexPieVisible = false
+  elements.codexGraphSection.style.display = 'none'
+  elements.codexPieSection.style.display = 'none'
+  elements.codexGraphToggleBtn.classList.remove('active')
+  elements.codexPieToggleBtn.classList.remove('active')
+  stopCodexCountdown()
+  stopCodexStatusTimer()
+  elements.codexStatusText.textContent = 'Connect Codex to load usage'
 }
 
 function showCodexContent(): void {
@@ -1039,6 +1128,23 @@ async function fetchCodexUsageData(): Promise<void> {
     showCodexContent()
     updateCodexUI(data)
     startCodexCountdown()
+    codexLastRefreshTime = Date.now()
+    updateCodexStatusText()
+    startCodexStatusTimer()
+
+    const codexHistoryEntry: UsageHistoryEntry = {
+      timestamp: codexLastRefreshTime,
+      session: latestUsageData?.five_hour?.utilization || 0,
+      weekly: latestUsageData?.seven_day?.utilization || 0,
+      sonnet: latestUsageData?.seven_day_sonnet?.utilization || 0,
+      opus: latestUsageData?.seven_day_opus?.utilization,
+      cowork: latestUsageData?.seven_day_cowork?.utilization,
+      oauthApps: latestUsageData?.seven_day_oauth_apps?.utilization,
+      codexSession: data.five_hour?.utilization,
+      codexWeekly: data.seven_day?.utilization,
+    }
+    await window.electronAPI.saveUsageHistoryEntry(codexHistoryEntry)
+
     // Update tray with Codex stats included
     if (latestUsageData) {
       window.electronAPI.updateTrayUsage({
@@ -1049,10 +1155,17 @@ async function fetchCodexUsageData(): Promise<void> {
         codexWeekly: data.seven_day?.utilization,
       })
     }
+    if (isCodexGraphVisible) {
+      renderCodexUsageChart()
+    }
+    if (isCodexPieVisible) {
+      renderCodexPieChart()
+    }
     resizeWidget()
   } catch (error) {
     const err = error as Error
     if (err.message.includes('CodexSessionExpired') || err.message.includes('Missing Codex')) {
+      codexHasData = false
       showCodexLogin()
     } else {
       // Try cached
@@ -1062,8 +1175,18 @@ async function fetchCodexUsageData(): Promise<void> {
         showCodexContent()
         updateCodexUI(cached.data)
         startCodexCountdown()
+        codexLastRefreshTime = cached.timestamp
+        updateCodexStatusText()
+        startCodexStatusTimer()
+        if (isCodexGraphVisible) {
+          renderCodexUsageChart()
+        }
+        if (isCodexPieVisible) {
+          renderCodexPieChart()
+        }
         resizeWidget()
       } else {
+        codexHasData = false
         showCodexLogin()
         elements.codexLoginError.textContent = 'Failed to fetch. Try reconnecting.'
       }
@@ -1106,7 +1229,10 @@ async function handleCodexAutoDetect(): Promise<void> {
   try {
     const result = await window.electronAPI.detectCodexToken()
     if (result.success && result.accessToken) {
-      await window.electronAPI.saveCodexCredentials(result.accessToken)
+      await window.electronAPI.saveCodexCredentials({
+        accessToken: result.accessToken,
+        cookieName: result.cookieName,
+      })
       await fetchCodexUsageData()
     } else {
       elements.codexLoginError.textContent = result.error || 'Detection failed'
@@ -1122,7 +1248,7 @@ async function handleCodexAutoDetect(): Promise<void> {
 async function handleCodexManualToken(): Promise<void> {
   const token = elements.codexTokenInput.value.trim()
   if (!token) {
-    elements.codexTokenError.textContent = 'Please paste your Bearer token'
+    elements.codexTokenError.textContent = 'Please paste your Codex token'
     return
   }
 
@@ -1131,7 +1257,7 @@ async function handleCodexManualToken(): Promise<void> {
   elements.codexTokenError.textContent = ''
 
   try {
-    await window.electronAPI.saveCodexCredentials(token)
+    await window.electronAPI.saveCodexCredentials({ accessToken: token })
     elements.codexTokenInput.value = ''
     await fetchCodexUsageData()
     if (!codexHasData) {
@@ -1183,17 +1309,18 @@ async function renderUsageChart(): Promise<void> {
     const canvas = elements.usageChart
     const dpr = window.devicePixelRatio || 1
     const rect = canvas.parentElement!.getBoundingClientRect()
+    const chartHeight = rect.height - 28
     canvas.width = rect.width * dpr
-    canvas.height = (rect.height - 16) * dpr // account for padding
+    canvas.height = chartHeight * dpr // account for padding + subtitle
     canvas.style.width = rect.width + 'px'
-    canvas.style.height = rect.height - 16 + 'px'
+    canvas.style.height = chartHeight + 'px'
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.scale(dpr, dpr)
 
     const w = rect.width
-    const h = rect.height - 16
+    const h = chartHeight
     const padLeft = 30
     const padRight = 10
     const padTop = 20
@@ -1310,17 +1437,18 @@ function renderPieChart(): void {
   const canvas = elements.pieChart
   const dpr = window.devicePixelRatio || 1
   const rect = canvas.parentElement!.getBoundingClientRect()
+  const chartHeight = rect.height - 28
   canvas.width = rect.width * dpr
-  canvas.height = (rect.height - 16) * dpr
+  canvas.height = chartHeight * dpr
   canvas.style.width = rect.width + 'px'
-  canvas.style.height = rect.height - 16 + 'px'
+  canvas.style.height = chartHeight + 'px'
 
   const ctx = canvas.getContext('2d')
   if (!ctx) return
   ctx.scale(dpr, dpr)
 
   const w = rect.width
-  const h = rect.height - 16
+  const h = chartHeight
 
   ctx.clearRect(0, 0, w, h)
 
@@ -1478,6 +1606,198 @@ function renderPieChart(): void {
   legendRow('#8b5cf6', `${Math.round(sessionPct)}% used`, `of 5h window`)
 }
 
+async function renderCodexUsageChart(): Promise<void> {
+  try {
+    const history = await window.electronAPI.getUsageHistory()
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+    const recent = history.filter((e) => e.timestamp >= sevenDaysAgo && (e.codexSession != null || e.codexWeekly != null))
+
+    const hourlyData: Record<string, UsageHistoryEntry> = {}
+    for (const entry of recent) {
+      const date = new Date(entry.timestamp)
+      const hourKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`
+      if (!hourlyData[hourKey] || entry.timestamp > hourlyData[hourKey].timestamp) {
+        hourlyData[hourKey] = entry
+      }
+    }
+
+    const sortedKeys = Object.keys(hourlyData).sort()
+    const sessionData = sortedKeys.map((k) => hourlyData[k].codexSession ?? 0)
+    const weeklyData = sortedKeys.map((k) => hourlyData[k].codexWeekly ?? 0)
+    const labels = sortedKeys.map((k) => {
+      const parts = k.split(' ')
+      const dateParts = parts[0].split('-')
+      return `${dateParts[1]}/${dateParts[2]} ${parts[1]}`
+    })
+
+    const canvas = elements.codexUsageChart
+    const dpr = window.devicePixelRatio || 1
+    const rect = canvas.parentElement!.getBoundingClientRect()
+    const chartHeight = rect.height - 28
+    canvas.width = rect.width * dpr
+    canvas.height = chartHeight * dpr
+    canvas.style.width = rect.width + 'px'
+    canvas.style.height = chartHeight + 'px'
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.scale(dpr, dpr)
+
+    const w = rect.width
+    const h = chartHeight
+    const padLeft = 30
+    const padRight = 10
+    const padTop = 20
+    const padBottom = 20
+    const chartW = w - padLeft - padRight
+    const chartH = h - padTop - padBottom
+
+    ctx.clearRect(0, 0, w, h)
+
+    if (sortedKeys.length < 2) {
+      ctx.fillStyle = '#505050'
+      ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('Codex history will appear after a few refreshes', w / 2, h / 2)
+      return
+    }
+
+    ctx.textAlign = 'right'
+    ctx.textBaseline = 'middle'
+    ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
+    for (let pct = 0; pct <= 100; pct += 25) {
+      const y = padTop + chartH - (pct / 100) * chartH
+      ctx.fillStyle = '#505050'
+      ctx.fillText(pct + '%', padLeft - 4, y)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(padLeft, y)
+      ctx.lineTo(padLeft + chartW, y)
+      ctx.stroke()
+    }
+
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    const labelStep = Math.max(1, Math.floor(sortedKeys.length / 6))
+    for (let i = 0; i < sortedKeys.length; i += labelStep) {
+      const x = padLeft + (i / (sortedKeys.length - 1)) * chartW
+      ctx.fillStyle = '#505050'
+      ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
+      ctx.fillText(labels[i], x, padTop + chartH + 4)
+    }
+
+    function drawLine(data: number[], color: string, fillColor: string): void {
+      if (data.length < 2) return
+      ctx!.beginPath()
+      for (let i = 0; i < data.length; i++) {
+        const x = padLeft + (i / (data.length - 1)) * chartW
+        const y = padTop + chartH - (data[i] / 100) * chartH
+        if (i === 0) ctx!.moveTo(x, y)
+        else ctx!.lineTo(x, y)
+      }
+      ctx!.strokeStyle = color
+      ctx!.lineWidth = 1.5
+      ctx!.stroke()
+      ctx!.lineTo(padLeft + chartW, padTop + chartH)
+      ctx!.lineTo(padLeft, padTop + chartH)
+      ctx!.closePath()
+      ctx!.fillStyle = fillColor
+      ctx!.fill()
+    }
+
+    drawLine(sessionData, '#10b981', 'rgba(16, 185, 129, 0.12)')
+    drawLine(weeklyData, '#14b8a6', 'rgba(20, 184, 166, 0.09)')
+
+    const legendY = 6
+    ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = '#10b981'
+    ctx.fillRect(padLeft, legendY - 3, 10, 6)
+    ctx.fillStyle = '#a0a0a0'
+    ctx.fillText('Session', padLeft + 14, legendY)
+    ctx.fillStyle = '#14b8a6'
+    ctx.fillRect(padLeft + 72, legendY - 3, 10, 6)
+    ctx.fillStyle = '#a0a0a0'
+    ctx.fillText('Weekly', padLeft + 86, legendY)
+  } catch (error) {
+    debugLog('Codex chart rendering failed:', error)
+  }
+}
+
+function renderCodexPieChart(): void {
+  if (!latestCodexData) return
+
+  const sessionPct = latestCodexData.five_hour?.utilization ?? 0
+  const weeklyPct = latestCodexData.seven_day?.utilization ?? 0
+
+  const canvas = elements.codexPieChart
+  const dpr = window.devicePixelRatio || 1
+  const rect = canvas.parentElement!.getBoundingClientRect()
+  const chartHeight = rect.height - 28
+  canvas.width = rect.width * dpr
+  canvas.height = chartHeight * dpr
+  canvas.style.width = rect.width + 'px'
+  canvas.style.height = chartHeight + 'px'
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.scale(dpr, dpr)
+
+  const w = rect.width
+  const h = chartHeight
+  ctx.clearRect(0, 0, w, h)
+
+  const cx = w * 0.36
+  const cy = h / 2
+  const outerRadius = Math.min(w, h) * 0.32
+  const outerWidth = outerRadius * 0.3
+  const innerRadius = outerRadius * 0.6
+  const innerWidth = outerRadius * 0.3
+  const start = -Math.PI / 2
+  const tau = 2 * Math.PI
+
+  function drawRing(radius: number, width: number, value: number, usedColor: string, remainColor: string): void {
+    const pct = Math.max(0, Math.min(100, value))
+    ctx!.beginPath()
+    ctx!.arc(cx, cy, radius, start, start + tau, false)
+    ctx!.lineWidth = width
+    ctx!.strokeStyle = remainColor
+    ctx!.stroke()
+    ctx!.beginPath()
+    ctx!.arc(cx, cy, radius, start, start + (pct / 100) * tau, false)
+    ctx!.lineWidth = width
+    ctx!.strokeStyle = usedColor
+    ctx!.stroke()
+  }
+
+  drawRing(outerRadius, outerWidth, weeklyPct, '#14b8a6', 'rgba(20, 184, 166, 0.16)')
+  drawRing(innerRadius, innerWidth, sessionPct, '#10b981', 'rgba(16, 185, 129, 0.16)')
+
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, sans-serif'
+  ctx.fillStyle = '#c0c0c0'
+  ctx.fillText(`${Math.round(sessionPct)}%`, cx, cy)
+  ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
+  ctx.fillStyle = '#707070'
+  ctx.fillText('session used', cx, cy + 14)
+
+  const legendX = w * 0.68
+  const baseY = cy - 20
+  ctx.textAlign = 'left'
+  ctx.fillStyle = '#14b8a6'
+  ctx.fillRect(legendX, baseY, 8, 8)
+  ctx.fillStyle = '#c0c0c0'
+  ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif'
+  ctx.fillText(`Weekly: ${Math.round(weeklyPct)}% used`, legendX + 12, baseY + 4)
+  ctx.fillStyle = '#10b981'
+  ctx.fillRect(legendX, baseY + 18, 8, 8)
+  ctx.fillStyle = '#c0c0c0'
+  ctx.fillText(`Session: ${Math.round(sessionPct)}% used`, legendX + 12, baseY + 22)
+}
+
 // Add spinning animation for refresh button
 const style = document.createElement('style')
 style.textContent = `
@@ -1500,6 +1820,7 @@ window.addEventListener('beforeunload', () => {
   stopAutoUpdate()
   stopOfflineRetry()
   stopCodexCountdown()
+  stopCodexStatusTimer()
   if (countdownInterval) clearInterval(countdownInterval)
   if (statusInterval) clearInterval(statusInterval)
 })
