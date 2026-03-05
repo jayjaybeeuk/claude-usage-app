@@ -41,7 +41,8 @@ interface StoreSchema {
   refreshIntervalMinutes: number
   cachedUsageData: UsageData          // latest successful fetch result
   cachedUsageTimestamp: number        // Unix ms timestamp of that fetch
-  codexAccessToken: string            // Codex Bearer token
+  codexAccessToken: string            // Codex session cookie value
+  codexCookieName: string             // Name of the captured auth cookie
   cachedCodexUsageData: CodexUsageData
   cachedCodexUsageTimestamp: number
 }
@@ -737,7 +738,7 @@ ipcMain.handle(IpcChannels.DETECT_CODEX_TOKEN, async () => {
 
     let resolved = false
 
-    const CODEX_TOKEN_COOKIES = ['__Secure-next-auth.session-token', 'next-auth.session-token', '__cf_bm']
+    const CODEX_TOKEN_COOKIES = ['__Secure-next-auth.session-token', 'next-auth.session-token']
 
     const onCookieChanged = (
       _event: Electron.Event,
@@ -753,8 +754,9 @@ ipcMain.handle(IpcChannels.DETECT_CODEX_TOKEN, async () => {
       ) {
         resolved = true
         session.defaultSession.cookies.removeListener('changed', onCookieChanged)
+        store.set('codexCookieName', cookie.name)
         loginWin.close()
-        resolve({ success: true, accessToken: cookie.value })
+        resolve({ success: true, accessToken: cookie.value, cookieName: cookie.name })
       }
     }
 
@@ -778,9 +780,10 @@ ipcMain.handle(IpcChannels.FETCH_CODEX_USAGE, async () => {
   }
 
   try {
+    const cookieName = (store.get('codexCookieName') as string | undefined) ?? '__Secure-next-auth.session-token'
     const response = await session.defaultSession.fetch('https://chatgpt.com/backend-api/wham/usage', {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Cookie: `${cookieName}=${accessToken}`,
         'User-Agent': USER_AGENT,
         Accept: 'application/json',
         'Content-Type': 'application/json',
