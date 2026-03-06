@@ -1,4 +1,4 @@
-# Claude Usage Widget
+# Agent Usage Widget
 
 ## Overview
 
@@ -65,6 +65,7 @@ Defined in `src/shared/ipc-channels.ts`. All channel names are string constants 
 ## API Endpoints
 
 All requests go to `claude.ai/api/organizations/{orgId}/`:
+
 - `usage` — session and weekly utilization (required)
 - `overage_spend_limit` — spending limits (optional)
 - `prepaid/credits` — prepaid balance (optional)
