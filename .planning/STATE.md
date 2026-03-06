@@ -4,7 +4,7 @@
 
 See: .planning/PROJECT.md (updated 2026-02-20)
 
-**Core value:** Users can glance at their Claude usage limits at any time without opening a browser or interrupting their workflow.
+**Core value:** Users can glance at their Agent Usage limits at any time without opening a browser or interrupting their workflow.
 **Current focus:** Phase 1 - Offline Mode
 
 ## Current Position
@@ -19,21 +19,23 @@ Progress: [███░░░░░░░] 25%
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 3
 - Average duration: 2 min
 - Total execution time: 0.1 hours
 
 **By Phase:**
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 01-offline-mode | 3 | 7 min | 2 min |
+| Phase           | Plans | Total | Avg/Plan |
+| --------------- | ----- | ----- | -------- |
+| 01-offline-mode | 3     | 7 min | 2 min    |
 
 **Recent Trend:**
+
 - Last 5 plans: 01-01 (1 min), 01-02 (1 min), 01-03 (~5 min)
 - Trend: N/A
 
-*Updated after each plan completion*
+_Updated after each plan completion_
 
 ## Accumulated Context
 
@@ -61,6 +63,7 @@ None yet.
 ### Blockers/Concerns
 
 **Phase 3 (Auto-Updates):**
+
 - Code signing required before v1.4.0 ships (Apple Developer account for macOS notarization, Windows certificate for SmartScreen)
 - Lead time: Apple Developer approval can take days/weeks
 - Mitigation: Start code signing setup early (research suggests this is critical path)
@@ -72,4 +75,5 @@ Stopped at: Completed 01-offline-mode/01-03-PLAN.md (renderer offline mode — P
 Resume file: None
 
 ---
-*State initialized: 2026-02-20*
+
+_State initialized: 2026-02-20_

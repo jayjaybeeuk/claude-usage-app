@@ -1,4 +1,4 @@
-# Claude Usage Widget
+# Agent Usage Widget
 
 ## What This Is
 
@@ -6,7 +6,7 @@ A cross-platform Electron desktop widget that monitors Claude.ai usage statistic
 
 ## Core Value
 
-Users can glance at their Claude usage limits at any time without opening a browser or interrupting their workflow.
+Users can glance at their Agent Usage limits at any time without opening a browser or interrupting their workflow.
 
 ## Requirements
 
@@ -59,12 +59,13 @@ Users can glance at their Claude usage limits at any time without opening a brow
 
 ## Key Decisions
 
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Show last known data when offline | Simpler than timer-only fallback, more useful to user | — Pending |
-| Prompt before auto-update install | User controls when app restarts, less disruptive | — Pending |
-| Launch-at-startup opt-in by default | Respect user preference, avoid unwanted startup items | — Pending |
+| Decision                                  | Rationale                                             | Outcome   |
+| ----------------------------------------- | ----------------------------------------------------- | --------- |
+| Show last known data when offline         | Simpler than timer-only fallback, more useful to user | — Pending |
+| Prompt before auto-update install         | User controls when app restarts, less disruptive      | — Pending |
+| Launch-at-startup opt-in by default       | Respect user preference, avoid unwanted startup items | — Pending |
 | Use electron-updater with GitHub provider | Already distributing via GitHub Releases, natural fit | — Pending |
 
 ---
-*Last updated: 2026-02-20 after initialization*
+
+_Last updated: 2026-02-20 after initialization_

@@ -6,9 +6,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ASSETS_DIR="$SCRIPT_DIR/../assets"
-EXPORTS_DIR="$ASSETS_DIR/Claude Usage App Exports"
-ICON_BUNDLE="$ASSETS_DIR/Claude Usage App.icon/Assets/Image.png"
-DEFAULT_ICON="$EXPORTS_DIR/Claude Usage App-iOS-Default-1024x1024@1x.png"
+EXPORTS_DIR="$ASSETS_DIR/Agent Usage App Exports"
+ICON_BUNDLE="$ASSETS_DIR/Agent Usage App.icon/Assets/Image.png"
+DEFAULT_ICON="$EXPORTS_DIR/Agent Usage App-iOS-Default-1024x1024@1x.png"
 
 # Verify source files exist
 if [ ! -f "$DEFAULT_ICON" ]; then
@@ -16,8 +16,8 @@ if [ ! -f "$DEFAULT_ICON" ]; then
   echo "  $DEFAULT_ICON"
   echo ""
   echo "Export icons from Apple Icon Composer first:"
-  echo "  Open assets/Claude Usage App.icon in Icon Composer"
-  echo "  File > Export > save to assets/Claude Usage App Exports/"
+  echo "  Open assets/Agent Usage App.icon in Icon Composer"
+  echo "  File > Export > save to assets/Agent Usage App Exports/"
   exit 1
 fi
 

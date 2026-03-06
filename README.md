@@ -1,8 +1,8 @@
-# Claude Usage App
+# Agent Usage App
 
 A beautiful, standalone Windows, Mac and Linux desktop app that displays your Claude.ai usage statistics in real-time.
 
-![Claude Usage App](assets/claude-usage-screenshot.png)
+![Agent Usage App](assets/claude-usage-screenshot.png)
 
 ## Features
 
@@ -21,7 +21,7 @@ A beautiful, standalone Windows, Mac and Linux desktop app that displays your Cl
 
 1. Download the latest `Claude-Usage-App-Setup.exe` from [Releases](https://github.com/jayjaybeeuk/claude-usage-app/releases)
 2. Run the installer
-3. Launch "Claude Usage Widget" from Start Menu
+3. Launch "Agent Usage Widget" from Start Menu
 
 ### Build from Source
 

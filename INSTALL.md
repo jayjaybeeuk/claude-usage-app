@@ -53,8 +53,8 @@ npm run build:win
 
 **Windows:**
 
-1. Settings → Apps → Claude Usage Widget → Uninstall
-2. Or run `Uninstall Claude Usage Widget.exe` from install directory
+1. Settings → Apps → Agent Usage Widget → Uninstall
+2. Or run `Uninstall Agent Usage Widget.exe` from install directory
 
 **Manual cleanup:**
 
@@ -80,7 +80,7 @@ npm run build:win
 ### Can't find after install
 
 - Check Start Menu → All Apps
-- Search for "Claude Usage Widget"
+- Search for "Agent Usage Widget"
 - Check Desktop for shortcut
 
 ## Security Notes

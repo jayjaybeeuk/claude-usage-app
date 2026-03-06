@@ -215,7 +215,7 @@ let latestTrayStats: TrayUsageStats | null = null
 function buildTrayMenu(): Electron.Menu {
   const items: MenuItemConstructorOptions[] = []
 
-  // Claude usage stats
+  // Agent Usage stats
   if (latestTrayStats) {
     items.push({ label: 'Claude', enabled: false })
     items.push({

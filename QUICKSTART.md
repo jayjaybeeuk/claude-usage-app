@@ -156,7 +156,7 @@ Add to `updateUI()` in `app.js`:
 
 ```javascript
 if (weeklyUtilization >= 90) {
-  new Notification("Claude Usage Alert", {
+  new Notification("Agent Usage Alert", {
     body: "You're at 90% of weekly limit!",
   });
 }
