@@ -19,7 +19,7 @@ A beautiful, standalone Windows, Mac and Linux desktop app that displays your Cl
 
 ### Download Pre-built Release
 
-1. Download the latest `Claude-Usage-App-Setup.exe` from [Releases](https://github.com/jayjaybeeuk/claude-usage-app/releases)
+1. Download the latest `Agent-Usage-App-Setup.exe` from [Releases](https://github.com/jayjaybeeuk/claude-usage-app/releases)
 2. Run the installer
 3. Launch "Agent Usage Widget" from Start Menu
 
