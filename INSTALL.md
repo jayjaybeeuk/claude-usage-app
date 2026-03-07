@@ -20,11 +20,13 @@ cd claude-usage-app
 # Install dependencies
 npm install
 
-# Run the widget
-npm start
+# Run in development mode
+npm run dev
 
-# Or build installer
-npm run build:win
+# Or package an installer/binary
+npm run package
+# Windows-only
+npm run package:win
 ```
 
 ## First Time Setup

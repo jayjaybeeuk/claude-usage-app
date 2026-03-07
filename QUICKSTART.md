@@ -12,7 +12,7 @@ npm install
 ### 2. Run in Development Mode
 
 ```bash
-npm start
+npm run dev
 ```
 
 This will:
@@ -45,16 +45,24 @@ This will:
 ### 4. Build for Production
 
 ```bash
-npm run build:win
+npm run build
 ```
 
-Output: `dist/Claude-Usage-App-Setup.exe`
+Then package an installer/binary:
+
+```bash
+npm run package
+# Windows:
+npm run package:win
+```
+
+Output: `dist/` (electron-builder artifacts)
 
 ## Development Tips
 
 ### Enable DevTools
 
-Already enabled in dev mode. To disable, edit `main.js`:
+Already enabled in dev mode. To disable, edit `src/main/main.ts`: 
 
 ```javascript
 if (process.env.NODE_ENV === "development") {
@@ -66,7 +74,7 @@ if (process.env.NODE_ENV === "development") {
 ### Test Without Building
 
 ```bash
-npm start
+npm run dev
 ```
 
 ### Debug Authentication
@@ -99,17 +107,22 @@ return;
 
 ```
 claude-usage-app/
-├── main.js                 # Electron main process
-├── preload.js             # IPC bridge
-├── package.json           # Dependencies & build config
+├── package.json
 ├── src/
-│   └── renderer/
-│       ├── index.html     # Widget UI
-│       ├── styles.css     # Styling
-│       └── app.js         # Frontend logic
+│   ├── main/
+│   │   ├── main.ts
+│   │   ├── preload.ts
+│   │   └── fetch-via-window.ts
+│   ├── renderer/
+│   │   ├── index.html
+│   │   ├── styles.css
+│   │   └── app.ts
+│   └── shared/
+│       ├── ipc-channels.ts
+│       └── ipc-types.ts
 └── assets/
-    ├── icon.ico           # App icon
-    └── tray-icon.png      # Tray icon
+    ├── icon.*
+    └── tray-icon.png
 ```
 
 ## Common Issues
@@ -123,12 +136,12 @@ Electron doesn't use ports, so this shouldn't happen.
 Check console for errors. Usually means:
 
 - Missing file paths
-- JavaScript errors in app.js
+- TypeScript/runtime errors in `src/renderer/app.ts`
 - CSS not loading
 
 ### Login Window Not Capturing Session
 
-Check `main.js` - the `did-finish-load` event handler should:
+Check `src/main/main.ts` - the BrowserWindow + cookie listener flow should:
 
 1. Check URL contains 'chat' or 'new'
 2. Extract sessionKey cookie
@@ -152,7 +165,7 @@ Edit `styles.css` - change gradient colors:
 
 ### Notification Alerts
 
-Add to `updateUI()` in `app.js`:
+Add to `updateUI()` in `src/renderer/app.ts`:
 
 ```javascript
 if (weeklyUtilization >= 90) {
@@ -164,25 +177,25 @@ if (weeklyUtilization >= 90) {
 
 ### Keyboard Shortcuts
 
-Add to `main.js`:
+Add to `src/main/main.ts`:
 
-```javascript
-const { globalShortcut } = require("electron");
+```ts
+import { globalShortcut } from 'electron'
 
 app.whenReady().then(() => {
-  globalShortcut.register("CommandOrControl+Shift+C", () => {
+  globalShortcut.register('CommandOrControl+Shift+C', () => {
     if (mainWindow) {
-      mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show();
+      mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()
     }
-  });
-});
+  })
+})
 ```
 
 ## Debugging
 
 ### Console Logs
 
-- Main process: Check terminal where you ran `npm start`
+- Main process: Check the terminal where you ran `npm run dev`
 - Renderer process: Check DevTools console (F12)
 
 ### Network Requests
@@ -201,10 +214,10 @@ await window.electronAPI.getCredentials();
 ## Publishing
 
 1. Update version in `package.json`
-2. Run `npm run build:win`
+2. Run `npm run package:win`
 3. Test the installer in `dist/`
 4. Create GitHub release
-5. Upload the `.exe` file
+5. Upload the installer/artifacts from `dist/`
 
 ## Next Steps
 
