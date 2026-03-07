@@ -40,20 +40,25 @@ cd claude-usage-app
 # Install dependencies
 npm install
 
-# Run in development mode
-npm start
+# Run in development mode (Vite + TS watch + Electron)
+npm run dev
 
-# Run with auth debug logging
-npm run start:debug
+# Run in development mode with verbose auth/debug logging
+npm run dev:debug
 
-# Run with auth debug logging + devtools
-npm run start:debug:dev
+# Build production bundles (TS + renderer)
+npm run build
 
-# Build installer for Windows
-npm run build:win
+# Package an installer/binary for your platform
+npm run package
+
+# Or target a specific platform
+npm run package:win
+npm run package:mac
+npm run package:linux
 ```
 
-The installer will be created in the `dist/` folder.
+Packaged artifacts will be created in the `dist/` folder.
 
 ## Usage
 
@@ -132,7 +137,7 @@ override it in the app via **Settings → Auto-refresh** with the slider (1–20
 If login/usage calls fail, run with debug logging:
 
 ```bash
-npm run start:debug
+npm run dev:debug
 ```
 
 Look for lines that begin with:
@@ -177,10 +182,10 @@ The encryption key is embedded in the application. This protects against casual 
 
 **Built with:**
 
-- Electron 28.0.0
-- Pure JavaScript (no framework overhead)
-- Native Node.js APIs
-- electron-store for secure storage
+- Electron (see `package.json` for the current version)
+- TypeScript (main + renderer)
+- Vite (renderer bundling)
+- electron-store for local credential storage
 
 **API Endpoint:**
 
@@ -203,7 +208,7 @@ To enable verbose logging, run with the `--debug` flag or set the `DEBUG_LOG=1` 
 electron . --debug
 
 # Via env var
-DEBUG_LOG=1 npm start
+DEBUG_LOG=1 npm run dev:debug
 ```
 
 ## Roadmap
