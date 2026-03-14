@@ -1023,7 +1023,7 @@ body.platform-darwin .title-bar {
 
 .graph-section canvas {
     width: 100% !important;
-    height: 100% !important;
+    height: 140px !important;
 }
 
 /* Model Breakdown Pie Chart */
