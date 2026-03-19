@@ -116,6 +116,8 @@ const elements = {
   coffeeBtnAlt: getElement<HTMLButtonElement>('coffeeBtnAlt'),
   refreshIntervalSlider: getElement<HTMLInputElement>('refreshIntervalSlider'),
   refreshIntervalValue: getElement<HTMLSpanElement>('refreshIntervalValue'),
+  autoStartSection: getElement<HTMLDivElement>('autoStartSection'),
+  autoStartToggle: getElement<HTMLInputElement>('autoStartToggle'),
 
   // Codex
   codexSection: getElement<HTMLDivElement>('codexSection'),
@@ -191,6 +193,43 @@ async function setRefreshIntervalMinutes(minutes: number): Promise<void> {
   }
 }
 
+// Auto-start functionality
+async function checkAutoStartSupport(): Promise<void> {
+  try {
+    const isSupported = await window.electronAPI.isAutoStartSupported()
+    if (isSupported) {
+      elements.autoStartSection.style.display = 'block'
+      await loadAutoStartSetting()
+    } else {
+      elements.autoStartSection.style.display = 'none'
+    }
+  } catch (error) {
+    debugLog('Failed to check auto-start support:', error)
+    elements.autoStartSection.style.display = 'none'
+  }
+}
+
+async function loadAutoStartSetting(): Promise<void> {
+  try {
+    const enabled = await window.electronAPI.getAutoStart()
+    elements.autoStartToggle.checked = enabled
+  } catch (error) {
+    debugLog('Failed to load auto-start setting:', error)
+    elements.autoStartToggle.checked = false
+  }
+}
+
+async function setAutoStartEnabled(enabled: boolean): Promise<void> {
+  try {
+    const result = await window.electronAPI.setAutoStart(enabled)
+    elements.autoStartToggle.checked = result
+  } catch (error) {
+    debugLog('Failed to set auto-start:', error)
+    // Revert toggle state on error
+    elements.autoStartToggle.checked = !enabled
+  }
+}
+
 // Initialize
 async function init(): Promise<void> {
   // Apply platform-specific CSS class to body
@@ -205,6 +244,7 @@ async function init(): Promise<void> {
 
   setupEventListeners()
   await loadRefreshInterval()
+  await checkAutoStartSupport()
   credentials = await window.electronAPI.getCredentials()
 
   if (credentials.sessionKey && credentials.organizationId) {
@@ -318,6 +358,12 @@ function setupEventListeners(): void {
   elements.refreshIntervalSlider.addEventListener('change', async (event: Event) => {
     const value = Number((event.target as HTMLInputElement).value)
     await setRefreshIntervalMinutes(value)
+  })
+
+  // Auto-start toggle
+  elements.autoStartToggle.addEventListener('change', async (event: Event) => {
+    const enabled = (event.target as HTMLInputElement).checked
+    await setAutoStartEnabled(enabled)
   })
 
   elements.logoutBtn.addEventListener('click', async () => {
