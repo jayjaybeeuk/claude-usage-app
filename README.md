@@ -10,6 +10,7 @@ A beautiful, standalone Windows, Mac and Linux desktop app that displays your Cl
 - 📊 **Visual Progress Bars** - Clean, gradient progress indicators
 - ⏱️ **Countdown Timers** - Circular timers showing time until reset
 - 🔄 **Auto-refresh** - Updates every 5 minutes by default (changeable in Settings)
+- 🚀 **Auto-start** - Optional system startup launch (Windows & macOS)
 - 🎨 **Modern UI** - Sleek, draggable widget with dark theme
 - 🔒 **Secure** - Encrypted credential storage
 - 📍 **Always on Top** - Stays visible across all workspaces
@@ -106,11 +107,18 @@ Right-click the tray icon for:
 
 ## Configuration
 
-### Auto-start on Windows Boot
+### Auto-start with System (Windows & macOS)
 
-1. Press `Win + R`
-2. Type `shell:startup` and press Enter
-3. Create a shortcut to the widget executable in this folder
+1. Click the ⚙️ **Settings** button in the widget's title bar
+2. Toggle **"Start with system"** to enable/disable auto-start
+3. The app will automatically launch when you log in to your computer
+
+**Platform Support:**
+- ✅ **Windows**: Fully supported
+- ✅ **macOS**: Fully supported  
+- ❌ **Linux**: Not available (limited desktop environment support)
+
+*Note: The toggle only appears on supported platforms.*
 
 ### Custom Refresh Interval
 
