@@ -776,6 +776,59 @@ body.platform-darwin .title-bar {
     color: #8a8a8a;
 }
 
+/* Toggle switch styles */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.2);
+    transition: 0.3s ease;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 2px;
+    bottom: 2px;
+    background: #ffffff;
+    transition: 0.3s ease;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+input:checked + .toggle-slider {
+    background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+    border-color: rgba(139, 92, 246, 0.6);
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+.auto-start-section {
+    margin-top: 12px;
+}
+
 .coffee-btn {
     background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
     color: #1a1a1a;

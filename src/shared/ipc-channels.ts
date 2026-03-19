@@ -31,6 +31,11 @@ export const IpcChannels = {
   FETCH_CODEX_USAGE: 'fetch-codex-usage',
   GET_CACHED_CODEX_USAGE: 'get-cached-codex-usage',
 
+  // Auto-start settings
+  GET_AUTO_START: 'get-auto-start',
+  SET_AUTO_START: 'set-auto-start',
+  IS_AUTO_START_SUPPORTED: 'is-auto-start-supported',
+
   // on (main -> renderer)
   REFRESH_USAGE: 'refresh-usage',
   SESSION_EXPIRED: 'session-expired',

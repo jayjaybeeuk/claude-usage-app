@@ -131,6 +131,10 @@ export interface ElectronAPI {
   getPlatform: () => Promise<string>
   getRefreshIntervalMinutes: () => Promise<number>
   setRefreshIntervalMinutes: (minutes: number) => Promise<number>
+  // Auto-start settings
+  isAutoStartSupported: () => Promise<boolean>
+  getAutoStart: () => Promise<boolean>
+  setAutoStart: (enabled: boolean) => Promise<boolean>
   platform: string
   // Codex
   getCodexCredentials: () => Promise<CodexCredentials>

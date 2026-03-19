@@ -59,6 +59,11 @@ const api = {
   getRefreshIntervalMinutes: () => ipcRenderer.invoke('get-refresh-interval'),
   setRefreshIntervalMinutes: (minutes: number) => ipcRenderer.invoke('set-refresh-interval', minutes),
 
+  // Auto-start settings
+  isAutoStartSupported: () => ipcRenderer.invoke('is-auto-start-supported'),
+  getAutoStart: () => ipcRenderer.invoke('get-auto-start'),
+  setAutoStart: (enabled: boolean) => ipcRenderer.invoke('set-auto-start', enabled),
+
   // Platform info
   getPlatform: () => ipcRenderer.invoke('get-platform'),
   platform: process.platform,

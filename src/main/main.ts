@@ -46,6 +46,7 @@ interface StoreSchema {
   codexCookieName: string             // Name of the captured auth cookie
   cachedCodexUsageData: CodexUsageData
   cachedCodexUsageTimestamp: number
+  autoStartEnabled: boolean           // Whether app should start with system
 }
 
 const store = new Store<StoreSchema>({
@@ -500,6 +501,45 @@ ipcMain.handle(IpcChannels.SET_REFRESH_INTERVAL, (_event: Electron.IpcMainInvoke
   const clamped = clampRefreshMinutes(minutes)
   store.set('refreshIntervalMinutes', clamped)
   return clamped
+})
+
+// Auto-start functionality
+function isAutoStartSupported(): boolean {
+  // Electron's setLoginItemSettings is supported on Windows, macOS, and some Linux distributions
+  return process.platform === 'win32' || process.platform === 'darwin'
+}
+
+function getAutoStartEnabled(): boolean {
+  if (!isAutoStartSupported()) return false
+  return store.get('autoStartEnabled', false)
+}
+
+function setAutoStartEnabled(enabled: boolean): boolean {
+  if (!isAutoStartSupported()) return false
+  
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: enabled,
+      openAsHidden: false
+    })
+    store.set('autoStartEnabled', enabled)
+    return enabled
+  } catch (error) {
+    debugLog('Failed to set auto-start:', error)
+    return false
+  }
+}
+
+ipcMain.handle(IpcChannels.IS_AUTO_START_SUPPORTED, () => {
+  return isAutoStartSupported()
+})
+
+ipcMain.handle(IpcChannels.GET_AUTO_START, () => {
+  return getAutoStartEnabled()
+})
+
+ipcMain.handle(IpcChannels.SET_AUTO_START, (_event: Electron.IpcMainInvokeEvent, enabled: boolean) => {
+  return setAutoStartEnabled(enabled)
 })
 
 ipcMain.handle(
@@ -1096,6 +1136,24 @@ app.whenReady().then(async () => {
   const codexCookieName = store.get('codexCookieName') as string | undefined
   if (codexAccessToken && codexCookieName) {
     await setCodexCookie(codexCookieName, codexAccessToken)
+  }
+  
+  // Sync auto-start setting with system state
+  if (isAutoStartSupported()) {
+    try {
+      const storedSetting = store.get('autoStartEnabled', false)
+      const loginItemSettings = app.getLoginItemSettings()
+      if (storedSetting !== loginItemSettings.openAtLogin) {
+        // Sync stored setting with actual system state on startup
+        debugLog('Syncing auto-start setting:', storedSetting, 'vs system:', loginItemSettings.openAtLogin)
+        app.setLoginItemSettings({
+          openAtLogin: storedSetting,
+          openAsHidden: false
+        })
+      }
+    } catch (error) {
+      debugLog('Failed to sync auto-start setting on startup:', error)
+    }
   }
 
   createMainWindow()
