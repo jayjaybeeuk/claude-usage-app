@@ -40,6 +40,8 @@ interface StoreSchema {
   windowPosition: { x: number; y: number }
   usageHistory: UsageHistoryEntry[]
   refreshIntervalMinutes: number
+  theme: string
+  backgroundHue: string
   cachedUsageData: UsageData          // latest successful fetch result
   cachedUsageTimestamp: number        // Unix ms timestamp of that fetch
   codexAccessToken: string            // Codex session cookie value
@@ -501,6 +503,29 @@ ipcMain.handle(IpcChannels.SET_REFRESH_INTERVAL, (_event: Electron.IpcMainInvoke
   const clamped = clampRefreshMinutes(minutes)
   store.set('refreshIntervalMinutes', clamped)
   return clamped
+})
+
+// Theme functionality
+ipcMain.handle(IpcChannels.GET_THEME, () => {
+  return store.get('theme', 'purple')
+})
+
+ipcMain.handle(IpcChannels.SET_THEME, (_event: Electron.IpcMainInvokeEvent, theme: string) => {
+  const validThemes = ['purple', 'lilac', 'orange', 'green', 'metallic']
+  const validTheme = validThemes.includes(theme) ? theme : 'purple'
+  store.set('theme', validTheme)
+  return validTheme
+})
+
+ipcMain.handle(IpcChannels.GET_BACKGROUND_HUE, () => {
+  return store.get('backgroundHue', 'match')
+})
+
+ipcMain.handle(IpcChannels.SET_BACKGROUND_HUE, (_event: Electron.IpcMainInvokeEvent, backgroundHue: string) => {
+  const validBackgroundHues = ['match', 'purple', 'lilac', 'orange', 'green', 'metallic']
+  const validBackgroundHue = validBackgroundHues.includes(backgroundHue) ? backgroundHue : 'match'
+  store.set('backgroundHue', validBackgroundHue)
+  return validBackgroundHue
 })
 
 // Auto-start functionality

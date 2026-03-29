@@ -11,7 +11,8 @@ A beautiful, standalone Windows, Mac and Linux desktop app that displays your Cl
 - ⏱️ **Countdown Timers** - Circular timers showing time until reset
 - 🔄 **Auto-refresh** - Updates every 5 minutes by default (changeable in Settings)
 - 🚀 **Auto-start** - Optional system startup launch (Windows & macOS)
-- 🎨 **Modern UI** - Sleek, draggable widget with dark theme
+- 🎨 **Theme Picker** - Switch between Purple, Lilac, Orange, Green, and Metallic palettes
+- 🌓 **Adaptive Styling** - Theme changes update the widget background plus distinct Claude and Codex colors
 - 🔒 **Secure** - Encrypted credential storage
 - 📍 **Always on Top** - Stays visible across all workspaces
 - 💾 **System Tray** - Minimizes to tray for easy access
@@ -85,7 +86,7 @@ Right-click the tray icon for:
 - Show/Hide widget
 - Refresh usage data
 - Re-login (if session expires)
-- Settings (coming soon)
+- Open Settings
 - Exit application
 
 ## Understanding the Display
@@ -95,8 +96,8 @@ Right-click the tray icon for:
 - **Progress Bar** - Shows usage from 0-100%
 - **Timer** - Time remaining until 5-hour session resets
 - **Color Coding**:
-  - Purple: Normal usage (0-74%)
-  - Orange: High usage (75-89%)
+  - Theme accent: Normal usage (0-74%)
+  - Amber: High usage (75-89%)
   - Red: Critical usage (90-100%)
 
 ### Weekly Limit
@@ -124,6 +125,22 @@ Right-click the tray icon for:
 
 The default interval is controlled by `DEFAULT_REFRESH_MINUTES` in `src/renderer/app.ts` (5 minutes). Users can
 override it in the app via **Settings → Auto-refresh** with the slider (1–20 minutes).
+
+### Theme Selection
+
+Use **Settings → Theme color** to switch between the built-in themes:
+
+- Purple
+- Lilac
+- Orange
+- Green
+- Metallic
+
+Each theme updates the widget background and keeps Claude and Codex visually distinct with separate accent colors
+across section headers, progress states, and charts.
+
+If you want to keep the service colors but change the shell treatment, use **Settings → Background hue** to override
+just the widget gradient.
 
 ## Troubleshooting
 
@@ -223,7 +240,7 @@ DEBUG_LOG=1 npm run dev:debug
 
 - [x] macOS support
 - [x] Linux support
-- [ ] Custom themes
+- [x] Custom themes
 - [ ] Notification alerts at usage thresholds
 - [x] Remember window position
 - [x] Settings panel

@@ -135,6 +135,11 @@ export interface ElectronAPI {
   isAutoStartSupported: () => Promise<boolean>
   getAutoStart: () => Promise<boolean>
   setAutoStart: (enabled: boolean) => Promise<boolean>
+  // Theme settings
+  getTheme: () => Promise<string>
+  setTheme: (theme: string) => Promise<string>
+  getBackgroundHue: () => Promise<string>
+  setBackgroundHue: (backgroundHue: string) => Promise<string>
   platform: string
   // Codex
   getCodexCredentials: () => Promise<CodexCredentials>

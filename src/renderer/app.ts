@@ -52,6 +52,35 @@ function getElement<T extends Element = HTMLElement>(id: string): T {
   return el as unknown as T
 }
 
+// Helper to get CSS custom property values
+function getCSSVariable(propertyName: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(propertyName).trim()
+}
+
+function getThemeColors(): Record<string, string> {
+  return {
+    claudePrimary: getCSSVariable('--claude-primary'),
+    claudeSecondary: getCSSVariable('--claude-secondary'),
+    claudeSecondaryLight: getCSSVariable('--claude-secondary-light'),
+    codexPrimary: getCSSVariable('--codex-primary'),
+    codexSecondary: getCSSVariable('--codex-secondary'),
+    codexSecondaryLight: getCSSVariable('--codex-secondary-light'),
+  }
+}
+
+// Helper to convert hex color to rgba with alpha
+function hexToRgba(hex: string, alpha: number): string {
+  // Remove the hash if it exists
+  hex = hex.replace('#', '')
+  
+  // Parse RGB values
+  const r = parseInt(hex.substr(0, 2), 16)
+  const g = parseInt(hex.substr(2, 2), 16)
+  const b = parseInt(hex.substr(4, 2), 16)
+  
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 // DOM elements
 const elements = {
   widgetContainer: getElement<HTMLDivElement>('widgetContainer'),
@@ -118,6 +147,8 @@ const elements = {
   refreshIntervalValue: getElement<HTMLSpanElement>('refreshIntervalValue'),
   autoStartSection: getElement<HTMLDivElement>('autoStartSection'),
   autoStartToggle: getElement<HTMLInputElement>('autoStartToggle'),
+  themeDropdown: getElement<HTMLSelectElement>('themeDropdown'),
+  backgroundHueDropdown: getElement<HTMLSelectElement>('backgroundHueDropdown'),
 
   // Codex
   codexSection: getElement<HTMLDivElement>('codexSection'),
@@ -193,6 +224,74 @@ async function setRefreshIntervalMinutes(minutes: number): Promise<void> {
   }
 }
 
+// Theme management
+function applyTheme(theme: string): void {
+  document.documentElement.setAttribute('data-theme', theme)
+  requestAnimationFrame(() => {
+    if (latestUsageData) {
+      if (isGraphVisible) void renderUsageChart()
+      if (isPieVisible) renderPieChart()
+    }
+
+    if (latestCodexData) {
+      if (isCodexGraphVisible) void renderCodexUsageChart()
+      if (isCodexPieVisible) renderCodexPieChart()
+    }
+  })
+}
+
+function applyBackgroundHue(backgroundHue: string): void {
+  if (backgroundHue === 'match') {
+    document.documentElement.removeAttribute('data-background-hue')
+    return
+  }
+
+  document.documentElement.setAttribute('data-background-hue', backgroundHue)
+}
+
+async function loadTheme(): Promise<void> {
+  try {
+    const savedTheme = await window.electronAPI.getTheme()
+    const theme = savedTheme || 'purple'
+    elements.themeDropdown.value = theme
+    applyTheme(theme)
+  } catch (error) {
+    console.warn('Failed to load theme, using purple as default:', error)
+    applyTheme('purple')
+  }
+}
+
+async function loadBackgroundHue(): Promise<void> {
+  try {
+    const savedBackgroundHue = await window.electronAPI.getBackgroundHue()
+    const backgroundHue = savedBackgroundHue || 'match'
+    elements.backgroundHueDropdown.value = backgroundHue
+    applyBackgroundHue(backgroundHue)
+  } catch (error) {
+    console.warn('Failed to load background hue, matching theme:', error)
+    applyBackgroundHue('match')
+  }
+}
+
+async function setTheme(theme: string): Promise<void> {
+  try {
+    await window.electronAPI.setTheme(theme)
+    applyTheme(theme)
+  } catch (error) {
+    console.error('Failed to save theme:', error)
+  }
+}
+
+async function setBackgroundHue(backgroundHue: string): Promise<void> {
+  try {
+    await window.electronAPI.setBackgroundHue(backgroundHue)
+    applyBackgroundHue(backgroundHue)
+    applyTheme(elements.themeDropdown.value)
+  } catch (error) {
+    console.error('Failed to save background hue:', error)
+  }
+}
+
 // Auto-start functionality
 async function checkAutoStartSupport(): Promise<void> {
   try {
@@ -244,6 +343,8 @@ async function init(): Promise<void> {
 
   setupEventListeners()
   await loadRefreshInterval()
+  await loadTheme()
+  await loadBackgroundHue()
   await checkAutoStartSupport()
   credentials = await window.electronAPI.getCredentials()
 
@@ -364,6 +465,17 @@ function setupEventListeners(): void {
   elements.autoStartToggle.addEventListener('change', async (event: Event) => {
     const enabled = (event.target as HTMLInputElement).checked
     await setAutoStartEnabled(enabled)
+  })
+
+  // Theme dropdown
+  elements.themeDropdown.addEventListener('change', async (event: Event) => {
+    const theme = (event.target as HTMLSelectElement).value
+    await setTheme(theme)
+  })
+
+  elements.backgroundHueDropdown.addEventListener('change', async (event: Event) => {
+    const backgroundHue = (event.target as HTMLSelectElement).value
+    await setBackgroundHue(backgroundHue)
   })
 
   elements.logoutBtn.addEventListener('click', async () => {
@@ -1328,6 +1440,7 @@ async function handleCodexManualToken(): Promise<void> {
 // Lightweight Canvas 2D usage history chart (no external dependencies)
 async function renderUsageChart(): Promise<void> {
   try {
+    const { claudePrimary, claudeSecondary, claudeSecondaryLight } = getThemeColors()
     const history = await window.electronAPI.getUsageHistory()
 
     // Filter to last 7 days
@@ -1442,9 +1555,9 @@ async function renderUsageChart(): Promise<void> {
       ctx!.fill()
     }
 
-    drawLine(sessionData, '#8b5cf6', 'rgba(139, 92, 246, 0.1)')
-    drawLine(weeklyData, '#3b82f6', 'rgba(59, 130, 246, 0.08)')
-    drawLine(sonnetData, '#8b5cf6', 'rgba(139, 92, 246, 0.06)')
+    drawLine(sessionData, claudePrimary, hexToRgba(claudePrimary, 0.1))
+    drawLine(weeklyData, claudeSecondary, hexToRgba(claudeSecondary, 0.08))
+    drawLine(sonnetData, claudePrimary, hexToRgba(claudePrimary, 0.06))
     if (hasOpus) drawLine(opusData, '#f59e0b', 'rgba(245, 158, 11, 0.06)')
     if (hasCowork) drawLine(coworkData, '#10b981', 'rgba(16, 185, 129, 0.06)')
 
@@ -1454,9 +1567,9 @@ async function renderUsageChart(): Promise<void> {
       color: string
     }
     const legendItems: LegendItem[] = [
-      { label: 'Session', color: '#8b5cf6' },
-      { label: 'Weekly', color: '#3b82f6' },
-      { label: 'Sonnet', color: '#8b5cf6' },
+      { label: 'Session', color: claudePrimary },
+      { label: 'Weekly', color: claudeSecondaryLight || claudeSecondary },
+      { label: 'Sonnet', color: claudePrimary },
     ]
     if (hasOpus) legendItems.push({ label: 'Opus', color: '#f59e0b' })
     if (hasCowork) legendItems.push({ label: 'Cowork', color: '#10b981' })
@@ -1485,6 +1598,7 @@ async function renderUsageChart(): Promise<void> {
 //   Centre     = session % label
 function renderPieChart(): void {
   if (!latestUsageData) return
+  const { claudePrimary } = getThemeColors()
 
   const canvas = elements.pieChart
   const dpr = window.devicePixelRatio || 1
@@ -1513,7 +1627,7 @@ function renderPieChart(): void {
   // Outer ring: per-model weekly slices, sized by proportional share.
   // Future model keys (e.g. seven_day_haiku) surface automatically via the index signature.
   const MODEL_COLORS: Record<string, string> = {
-    seven_day_sonnet:     '#8b5cf6',
+    seven_day_sonnet:     claudePrimary,
     seven_day_opus:       '#f59e0b',
     seven_day_cowork:     '#10b981',
     seven_day_oauth_apps: '#06b6d4',
@@ -1591,11 +1705,11 @@ function renderPieChart(): void {
   const usedAngle = (Math.min(sessionPct, 100) / 100) * TAU
   // Used portion (purple)
   if (usedAngle > 0.01) {
-    drawArc(innerOuter, innerInner, START, START + usedAngle, '#8b5cf6')
+    drawArc(innerOuter, innerInner, START, START + usedAngle, claudePrimary)
   }
   // Remaining portion (dim)
   if (usedAngle < TAU - 0.01) {
-    drawArc(innerOuter, innerInner, START + usedAngle, START + TAU, 'rgba(139,92,246,0.14)')
+    drawArc(innerOuter, innerInner, START + usedAngle, START + TAU, hexToRgba(claudePrimary, 0.14))
   }
 
   // --- Centre label: session % ---
@@ -1655,11 +1769,12 @@ function renderPieChart(): void {
   // Session section
   ly += 8
   legendHeader('SESSION')
-  legendRow('#8b5cf6', `${Math.round(sessionPct)}% used`, `of 5h window`)
+  legendRow(claudePrimary, `${Math.round(sessionPct)}% used`, `of 5h window`)
 }
 
 async function renderCodexUsageChart(): Promise<void> {
   try {
+    const { codexPrimary, codexSecondary } = getThemeColors()
     const history = await window.electronAPI.getUsageHistory()
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
     const recent = history.filter((e) => e.timestamp >= sevenDaysAgo && (e.codexSession != null || e.codexWeekly != null))
@@ -1758,18 +1873,18 @@ async function renderCodexUsageChart(): Promise<void> {
       ctx!.fill()
     }
 
-    drawLine(sessionData, '#10b981', 'rgba(16, 185, 129, 0.12)')
-    drawLine(weeklyData, '#14b8a6', 'rgba(20, 184, 166, 0.09)')
+    drawLine(sessionData, codexPrimary, hexToRgba(codexPrimary, 0.12))
+    drawLine(weeklyData, codexSecondary, hexToRgba(codexSecondary, 0.09))
 
     const legendY = 6
     ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillStyle = '#10b981'
+    ctx.fillStyle = codexPrimary
     ctx.fillRect(padLeft, legendY - 3, 10, 6)
     ctx.fillStyle = '#a0a0a0'
     ctx.fillText('Session', padLeft + 14, legendY)
-    ctx.fillStyle = '#14b8a6'
+    ctx.fillStyle = codexSecondary
     ctx.fillRect(padLeft + 72, legendY - 3, 10, 6)
     ctx.fillStyle = '#a0a0a0'
     ctx.fillText('Weekly', padLeft + 86, legendY)
@@ -1780,6 +1895,7 @@ async function renderCodexUsageChart(): Promise<void> {
 
 function renderCodexPieChart(): void {
   if (!latestCodexData) return
+  const { codexPrimary, codexSecondary } = getThemeColors()
 
   const sessionPct = latestCodexData.five_hour?.utilization ?? 0
   const weeklyPct = latestCodexData.seven_day?.utilization ?? 0
@@ -1824,8 +1940,8 @@ function renderCodexPieChart(): void {
     ctx!.stroke()
   }
 
-  drawRing(outerRadius, outerWidth, weeklyPct, '#14b8a6', 'rgba(20, 184, 166, 0.16)')
-  drawRing(innerRadius, innerWidth, sessionPct, '#10b981', 'rgba(16, 185, 129, 0.16)')
+  drawRing(outerRadius, outerWidth, weeklyPct, codexSecondary, hexToRgba(codexSecondary, 0.16))
+  drawRing(innerRadius, innerWidth, sessionPct, codexPrimary, hexToRgba(codexPrimary, 0.16))
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -1839,12 +1955,12 @@ function renderCodexPieChart(): void {
   const legendX = w * 0.68
   const baseY = cy - 20
   ctx.textAlign = 'left'
-  ctx.fillStyle = '#14b8a6'
+  ctx.fillStyle = codexSecondary
   ctx.fillRect(legendX, baseY, 8, 8)
   ctx.fillStyle = '#c0c0c0'
   ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif'
   ctx.fillText(`Weekly: ${Math.round(weeklyPct)}% used`, legendX + 12, baseY + 4)
-  ctx.fillStyle = '#10b981'
+  ctx.fillStyle = codexPrimary
   ctx.fillRect(legendX, baseY + 18, 8, 8)
   ctx.fillStyle = '#c0c0c0'
   ctx.fillText(`Session: ${Math.round(sessionPct)}% used`, legendX + 12, baseY + 22)

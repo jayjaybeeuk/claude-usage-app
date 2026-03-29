@@ -64,6 +64,12 @@ const api = {
   getAutoStart: () => ipcRenderer.invoke('get-auto-start'),
   setAutoStart: (enabled: boolean) => ipcRenderer.invoke('set-auto-start', enabled),
 
+  // Theme settings
+  getTheme: () => ipcRenderer.invoke('get-theme'),
+  setTheme: (theme: string) => ipcRenderer.invoke('set-theme', theme),
+  getBackgroundHue: () => ipcRenderer.invoke('get-background-hue'),
+  setBackgroundHue: (backgroundHue: string) => ipcRenderer.invoke('set-background-hue', backgroundHue),
+
   // Platform info
   getPlatform: () => ipcRenderer.invoke('get-platform'),
   platform: process.platform,

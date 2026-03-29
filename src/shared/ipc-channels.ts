@@ -36,6 +36,12 @@ export const IpcChannels = {
   SET_AUTO_START: 'set-auto-start',
   IS_AUTO_START_SUPPORTED: 'is-auto-start-supported',
 
+  // Theme settings
+  GET_THEME: 'get-theme',
+  SET_THEME: 'set-theme',
+  GET_BACKGROUND_HUE: 'get-background-hue',
+  SET_BACKGROUND_HUE: 'set-background-hue',
+
   // on (main -> renderer)
   REFRESH_USAGE: 'refresh-usage',
   SESSION_EXPIRED: 'session-expired',

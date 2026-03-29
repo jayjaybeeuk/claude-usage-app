@@ -38,6 +38,8 @@ This will:
 - [ ] Refresh button updates data
 - [ ] Minimize to system tray
 - [ ] Right-click tray icon shows menu
+- [ ] Settings panel opens from the title bar
+- [ ] Theme selector changes the background and both service palettes
 - [ ] Progress bars animate smoothly
 - [ ] Timers count down correctly
 - [ ] Re-login from tray menu works
@@ -89,6 +91,23 @@ Check the console for:
 
 The default is controlled by `DEFAULT_REFRESH_MINUTES` in `src/renderer/app.ts` (5 minutes). Users can change it
 in-app via **Settings → Auto-refresh** with the slider (1–20 minutes).
+
+### Change Theme
+
+The widget theme is persisted through the main process store and can be changed in-app via
+**Settings → Theme color**. The current options are:
+
+- Purple
+- Lilac
+- Orange
+- Green
+- Metallic
+
+Theme changes update the widget background and apply separate Claude and Codex accent colors across labels,
+progress states, and charts.
+
+Use **Settings → Background hue** if you want to override only the widget gradient and leave the selected service
+palette alone.
 
 ### Mock API Response
 
@@ -155,11 +174,26 @@ Session expired. Click "Re-login" from tray menu.
 
 ### Custom Themes
 
-Edit `styles.css` - change gradient colors:
+Built-in themes live in `src/renderer/styles.css`, and the allowed theme values are validated in
+`src/main/main.ts`.
+
+To add a new theme:
+
+1. Add a new `[data-theme="..."]` block in `src/renderer/styles.css`
+2. Define the widget background plus both Claude and Codex color tokens
+3. Add the new option to the theme dropdown in `src/renderer/index.html`
+4. Add the theme key to the `validThemes` array in `src/main/main.ts`
+
+Example structure:
 
 ```css
-.widget-container {
-  background: linear-gradient(135deg, #your-color 0%, #another-color 100%);
+[data-theme="your-theme"] {
+  --claude-primary: #your-claude-color;
+  --claude-secondary: #your-claude-secondary;
+  --codex-primary: #your-codex-color;
+  --codex-secondary: #your-codex-secondary;
+  --widget-bg-start: #your-background-start;
+  --widget-bg-end: #your-background-end;
 }
 ```
 
