@@ -1,6 +1,6 @@
 {
   "name": "agent-usage",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Desktop widget for agent usage monitoring",
   "main": "dist-main/main/main.js",
   "scripts": {
