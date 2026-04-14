@@ -881,12 +881,45 @@ function parseCodexUsageResponse(raw: Record<string, unknown>): CodexUsageData {
 }
 
 const CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
-const CODEX_TOKEN_COOKIES = ['__Secure-next-auth.session-token', 'next-auth.session-token']
+const CODEX_LOGIN_URL = 'https://chatgpt.com/login'
+const CODEX_TOKEN_COOKIES = [
+  '__Secure-next-auth.session-token',
+  'next-auth.session-token',
+  '__Secure-authjs.session-token',
+  'authjs.session-token',
+]
+const CODEX_COOKIE_SCAN_URLS = [
+  'https://chatgpt.com',
+  'https://auth.openai.com',
+  'https://openai.com',
+]
 
 type CodexAuthAttempt = { kind: 'bearer' } | { kind: 'cookie'; cookieName: string }
 
 function normalizeBearerToken(token: string): string {
   return token.replace(/^Bearer\s+/i, '').trim()
+}
+
+function isCodexCookieDomain(domain?: string): boolean {
+  if (!domain) return false
+  const normalized = domain.replace(/^\./, '').toLowerCase()
+  return normalized === 'chatgpt.com' || normalized.endsWith('.chatgpt.com') ||
+    normalized === 'openai.com' || normalized.endsWith('.openai.com')
+}
+
+function isCodexSessionCookie(cookie: Pick<Electron.Cookie, 'name' | 'domain' | 'value'>): boolean {
+  return Boolean(cookie.value && CODEX_TOKEN_COOKIES.includes(cookie.name) && isCodexCookieDomain(cookie.domain))
+}
+
+async function findCodexSessionCookie(): Promise<Electron.Cookie | null> {
+  for (const url of CODEX_COOKIE_SCAN_URLS) {
+    const cookies = await session.defaultSession.cookies.get({ url })
+    const match = cookies.find(isCodexSessionCookie)
+    if (match) {
+      return match
+    }
+  }
+  return null
 }
 
 function extractCodexAccessTokenFromAuthJson(parsed: Record<string, unknown>): string | null {
@@ -1021,7 +1054,7 @@ ipcMain.handle(IpcChannels.DETECT_CODEX_TOKEN, async () => {
     debugLog('Could not read ~/.codex/auth.json:', (err as Error).message)
   }
 
-  // 2. Fallback: open chatgpt.com and listen for auth cookie
+  // 2. Fallback: open chatgpt.com and capture the web session cookie.
   return new Promise((resolve) => {
     const loginWin = new BrowserWindow({
       width: 1000,
@@ -1034,6 +1067,40 @@ ipcMain.handle(IpcChannels.DETECT_CODEX_TOKEN, async () => {
     })
 
     let resolved = false
+    let cookiePoll: ReturnType<typeof setInterval> | null = null
+
+    const cleanup = (): void => {
+      session.defaultSession.cookies.removeListener('changed', onCookieChanged)
+      loginWin.webContents.removeListener('did-finish-load', onNavigationCheck)
+      loginWin.webContents.removeListener('did-navigate', onNavigationCheck)
+      loginWin.webContents.removeListener('did-redirect-navigation', onNavigationCheck)
+      if (cookiePoll) {
+        clearInterval(cookiePoll)
+        cookiePoll = null
+      }
+    }
+
+    const resolveFromCookie = (cookie: Electron.Cookie, source: string): void => {
+      if (resolved) return
+      resolved = true
+      debugLog(`Captured Codex session cookie via ${source}:`, cookie.name, cookie.domain)
+      store.set('codexCookieName', cookie.name)
+      cleanup()
+      loginWin.close()
+      resolve({ success: true, accessToken: cookie.value, cookieName: cookie.name })
+    }
+
+    const tryResolveFromExistingCookies = async (source: string): Promise<void> => {
+      if (resolved) return
+      try {
+        const cookie = await findCodexSessionCookie()
+        if (cookie) {
+          resolveFromCookie(cookie, source)
+        }
+      } catch (err) {
+        debugLog(`Failed scanning Codex cookies via ${source}:`, (err as Error).message)
+      }
+    }
 
     const onCookieChanged = (
       _event: Electron.Event,
@@ -1041,30 +1108,32 @@ ipcMain.handle(IpcChannels.DETECT_CODEX_TOKEN, async () => {
       _cause: string,
       removed: boolean,
     ): void => {
-      if (
-        !removed &&
-        cookie.value &&
-        cookie.domain?.includes('chatgpt.com') &&
-        CODEX_TOKEN_COOKIES.includes(cookie.name)
-      ) {
-        resolved = true
-        session.defaultSession.cookies.removeListener('changed', onCookieChanged)
-        store.set('codexCookieName', cookie.name)
-        loginWin.close()
-        resolve({ success: true, accessToken: cookie.value, cookieName: cookie.name })
+      if (!removed && isCodexSessionCookie(cookie)) {
+        resolveFromCookie(cookie, 'cookie-change')
       }
     }
 
+    const onNavigationCheck = (): void => {
+      void tryResolveFromExistingCookies('navigation')
+    }
+
     session.defaultSession.cookies.on('changed', onCookieChanged)
+    loginWin.webContents.on('did-finish-load', onNavigationCheck)
+    loginWin.webContents.on('did-navigate', onNavigationCheck)
+    loginWin.webContents.on('did-redirect-navigation', onNavigationCheck)
+    cookiePoll = setInterval(() => {
+      void tryResolveFromExistingCookies('poll')
+    }, 1000)
 
     loginWin.on('closed', () => {
-      session.defaultSession.cookies.removeListener('changed', onCookieChanged)
+      cleanup()
       if (!resolved) {
         resolve({ success: false, error: 'Login window closed' })
       }
     })
 
-    loginWin.loadURL('https://chatgpt.com/login')
+    void tryResolveFromExistingCookies('initial')
+    loginWin.loadURL(CODEX_LOGIN_URL)
   })
 })
 
