@@ -1305,11 +1305,6 @@ input:checked + .toggle-slider:before {
     height: 162px;
 }
 
-.pie-section canvas {
-    width: 100% !important;
-    height: 100% !important;
-}
-
 /* Sonnet row */
 .sonnet-row {
     margin-top: -2px;
