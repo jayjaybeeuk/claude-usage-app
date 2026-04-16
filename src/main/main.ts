@@ -7,6 +7,7 @@ import {
   session,
   shell,
   nativeImage,
+  safeStorage,
   MenuItemConstructorOptions,
 } from 'electron'
 import path from 'path'
@@ -52,7 +53,7 @@ interface StoreSchema {
   codexCookieName: string             // Name of the captured auth cookie
   cachedCodexUsageData: CodexUsageData
   cachedCodexUsageTimestamp: number
-  copilotAccessToken: string          // GitHub PAT with copilot + Plan:Read-only scopes
+  copilotAccessToken: string          // GitHub PAT encrypted via safeStorage (stored as base64)
   cachedCopilotUsageData: CopilotUsageData
   cachedCopilotUsageTimestamp: number
   autoStartEnabled: boolean           // Whether app should start with system
@@ -907,6 +908,31 @@ function normalizeBearerToken(token: string): string {
   return token.replace(/^Bearer\s+/i, '').trim()
 }
 
+/**
+ * Encrypts a plaintext string using Electron safeStorage (OS-backed:
+ * macOS Keychain, Windows DPAPI, Linux libsecret). Returns a base64-encoded
+ * string suitable for persistence in electron-store, or null when OS encryption
+ * is unavailable.
+ */
+function encryptSecret(plaintext: string): string | null {
+  if (!safeStorage.isEncryptionAvailable()) return null
+  return safeStorage.encryptString(plaintext).toString('base64')
+}
+
+/**
+ * Decrypts a base64-encoded blob previously produced by `encryptSecret`.
+ * Returns null when OS encryption is unavailable or when decryption fails
+ * (e.g. the stored value pre-dates this change and is unencrypted).
+ */
+function decryptSecret(base64: string): string | null {
+  if (!safeStorage.isEncryptionAvailable()) return null
+  try {
+    return safeStorage.decryptString(Buffer.from(base64, 'base64'))
+  } catch {
+    return null
+  }
+}
+
 function isCodexCookieDomain(domain?: string): boolean {
   if (!domain) return false
   const normalized = domain.replace(/^\./, '').toLowerCase()
@@ -1194,8 +1220,9 @@ ipcMain.handle(IpcChannels.GET_CACHED_CODEX_USAGE, (): CachedCodexUsageData | nu
 // ─── Copilot IPC Handlers ─────────────────────────────────────────────────────
 
 ipcMain.handle(IpcChannels.GET_COPILOT_CREDENTIALS, (): CopilotCredentials => {
+  const stored = store.get('copilotAccessToken') ?? null
   return {
-    accessToken: store.get('copilotAccessToken') ?? null,
+    accessToken: stored ? decryptSecret(stored) : null,
   }
 })
 
@@ -1206,7 +1233,11 @@ ipcMain.handle(
     if (!normalized) {
       throw new Error('Missing Copilot credentials')
     }
-    store.set('copilotAccessToken', normalized)
+    const encrypted = encryptSecret(normalized)
+    if (!encrypted) {
+      throw new Error('Failed to encrypt Copilot credentials: OS-backed encryption unavailable or failed')
+    }
+    store.set('copilotAccessToken', encrypted)
     return true
   },
 )
