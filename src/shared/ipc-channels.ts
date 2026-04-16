@@ -42,9 +42,18 @@ export const IpcChannels = {
   GET_BACKGROUND_HUE: 'get-background-hue',
   SET_BACKGROUND_HUE: 'set-background-hue',
 
+  // Copilot invoke channels
+  GET_COPILOT_CREDENTIALS: 'get-copilot-credentials',
+  SAVE_COPILOT_CREDENTIALS: 'save-copilot-credentials',
+  DELETE_COPILOT_CREDENTIALS: 'delete-copilot-credentials',
+  DETECT_COPILOT_TOKEN: 'detect-copilot-token',
+  FETCH_COPILOT_USAGE: 'fetch-copilot-usage',
+  GET_CACHED_COPILOT_USAGE: 'get-cached-copilot-usage',
+
   // on (main -> renderer)
   REFRESH_USAGE: 'refresh-usage',
   SESSION_EXPIRED: 'session-expired',
   CODEX_SESSION_EXPIRED: 'codex-session-expired',
+  COPILOT_SESSION_EXPIRED: 'copilot-session-expired',
   DEBUG_LOG: 'debug-log',
 } as const

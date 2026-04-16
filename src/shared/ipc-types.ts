@@ -38,6 +38,8 @@ export interface TrayUsageStats {
   sonnet: number
   codexSession?: number
   codexWeekly?: number
+  copilotConsumed?: number
+  copilotEntitlement?: number
 }
 
 export interface UsageHistoryEntry {
@@ -50,6 +52,8 @@ export interface UsageHistoryEntry {
   oauthApps?: number
   codexSession?: number
   codexWeekly?: number
+  copilotConsumed?: number
+  copilotEntitlement?: number
 }
 
 export interface UsageTimePeriod {
@@ -107,6 +111,34 @@ export interface CachedCodexUsageData {
   timestamp: number
 }
 
+export interface CopilotCredentials {
+  accessToken: string | null
+}
+
+export interface SaveCopilotCredentialsPayload {
+  accessToken: string
+}
+
+export interface DetectCopilotResult {
+  success: boolean
+  accessToken?: string
+  error?: string
+}
+
+export interface CopilotUsageData {
+  copilot_plan: 'free' | 'pro' | 'pro_plus' | 'business' | 'enterprise'
+  consumed: number
+  entitlement: number
+  remaining: number
+  percent_remaining: number
+  quota_reset_date: string
+}
+
+export interface CachedCopilotUsageData {
+  data: CopilotUsageData
+  timestamp: number
+}
+
 export interface ElectronAPI {
   getCredentials: () => Promise<Credentials>
   saveCredentials: (credentials: SaveCredentialsPayload) => Promise<boolean>
@@ -149,4 +181,12 @@ export interface ElectronAPI {
   fetchCodexUsageData: () => Promise<CodexUsageData>
   getCachedCodexUsage: () => Promise<CachedCodexUsageData | null>
   onCodexSessionExpired: (callback: () => void) => void
+  // Copilot
+  getCopilotCredentials: () => Promise<CopilotCredentials>
+  saveCopilotCredentials: (credentials: SaveCopilotCredentialsPayload) => Promise<boolean>
+  deleteCopilotCredentials: () => Promise<boolean>
+  detectCopilotToken: () => Promise<DetectCopilotResult>
+  fetchCopilotUsageData: () => Promise<CopilotUsageData>
+  getCachedCopilotUsage: () => Promise<CachedCopilotUsageData | null>
+  onCopilotSessionExpired: (callback: () => void) => void
 }

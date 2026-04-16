@@ -85,6 +85,17 @@ const api = {
   onCodexSessionExpired: (callback: () => void) => {
     ipcRenderer.on('codex-session-expired', () => callback())
   },
+  // Copilot
+  getCopilotCredentials: () => ipcRenderer.invoke('get-copilot-credentials'),
+  saveCopilotCredentials: (credentials: { accessToken: string }) =>
+    ipcRenderer.invoke('save-copilot-credentials', credentials),
+  deleteCopilotCredentials: () => ipcRenderer.invoke('delete-copilot-credentials'),
+  detectCopilotToken: () => ipcRenderer.invoke('detect-copilot-token'),
+  fetchCopilotUsageData: () => ipcRenderer.invoke('fetch-copilot-usage'),
+  getCachedCopilotUsage: () => ipcRenderer.invoke('get-cached-copilot-usage'),
+  onCopilotSessionExpired: (callback: () => void) => {
+    ipcRenderer.on('copilot-session-expired', () => callback())
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

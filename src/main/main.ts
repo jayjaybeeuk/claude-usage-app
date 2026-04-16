@@ -28,6 +28,10 @@ import type {
   CachedUsageData,
   CodexUsageData,
   CachedCodexUsageData,
+  CopilotCredentials,
+  SaveCopilotCredentialsPayload,
+  CopilotUsageData,
+  CachedCopilotUsageData,
 } from '../shared/ipc-types'
 
 // Resolve project root from compiled output location (dist-main/main/main.js)
@@ -48,6 +52,9 @@ interface StoreSchema {
   codexCookieName: string             // Name of the captured auth cookie
   cachedCodexUsageData: CodexUsageData
   cachedCodexUsageTimestamp: number
+  copilotAccessToken: string          // GitHub PAT with copilot + Plan:Read-only scopes
+  cachedCopilotUsageData: CopilotUsageData
+  cachedCopilotUsageTimestamp: number
   autoStartEnabled: boolean           // Whether app should start with system
 }
 
@@ -1180,6 +1187,53 @@ ipcMain.handle(IpcChannels.FETCH_CODEX_USAGE, async () => {
 ipcMain.handle(IpcChannels.GET_CACHED_CODEX_USAGE, (): CachedCodexUsageData | null => {
   const data = store.get('cachedCodexUsageData') as CodexUsageData | undefined
   const timestamp = store.get('cachedCodexUsageTimestamp') as number | undefined
+  if (!data || !timestamp) return null
+  return { data, timestamp }
+})
+
+// ─── Copilot IPC Handlers ─────────────────────────────────────────────────────
+
+ipcMain.handle(IpcChannels.GET_COPILOT_CREDENTIALS, (): CopilotCredentials => {
+  return {
+    accessToken: store.get('copilotAccessToken') ?? null,
+  }
+})
+
+ipcMain.handle(
+  IpcChannels.SAVE_COPILOT_CREDENTIALS,
+  (_event: Electron.IpcMainInvokeEvent, { accessToken }: SaveCopilotCredentialsPayload) => {
+    const trimmed = accessToken?.trim()
+    if (!trimmed) {
+      throw new Error('Missing Copilot credentials')
+    }
+    store.set('copilotAccessToken', trimmed)
+    return true
+  },
+)
+
+ipcMain.handle(IpcChannels.DELETE_COPILOT_CREDENTIALS, () => {
+  store.delete('copilotAccessToken' as keyof StoreSchema)
+  store.delete('cachedCopilotUsageData' as keyof StoreSchema)
+  store.delete('cachedCopilotUsageTimestamp' as keyof StoreSchema)
+  return true
+})
+
+ipcMain.handle(IpcChannels.DETECT_COPILOT_TOKEN, async () => {
+  // TODO (JAY-5): Cookie-based detection is unlikely to work for the GitHub billing endpoint.
+  // This stub always returns not-found, prompting the user to enter a PAT manually.
+  return { success: false, error: 'Auto-detect not supported for Copilot — please enter a PAT manually.' }
+})
+
+ipcMain.handle(IpcChannels.FETCH_COPILOT_USAGE, async (): Promise<CopilotUsageData> => {
+  // TODO (JAY-5): Implement actual GitHub Copilot billing API fetch.
+  // Requires PAT with `copilot` scope (GET /user/copilot) and Plan:Read-only
+  // scope (GET /users/{username}/settings/billing/premium_request/usage).
+  throw new Error('Copilot usage fetch not yet implemented')
+})
+
+ipcMain.handle(IpcChannels.GET_CACHED_COPILOT_USAGE, (): CachedCopilotUsageData | null => {
+  const data = store.get('cachedCopilotUsageData') as CopilotUsageData | undefined
+  const timestamp = store.get('cachedCopilotUsageTimestamp') as number | undefined
   if (!data || !timestamp) return null
   return { data, timestamp }
 })
