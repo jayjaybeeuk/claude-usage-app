@@ -1202,11 +1202,11 @@ ipcMain.handle(IpcChannels.GET_COPILOT_CREDENTIALS, (): CopilotCredentials => {
 ipcMain.handle(
   IpcChannels.SAVE_COPILOT_CREDENTIALS,
   (_event: Electron.IpcMainInvokeEvent, { accessToken }: SaveCopilotCredentialsPayload) => {
-    const trimmed = accessToken?.trim()
-    if (!trimmed) {
+    const normalized = normalizeBearerToken(accessToken)
+    if (!normalized) {
       throw new Error('Missing Copilot credentials')
     }
-    store.set('copilotAccessToken', trimmed)
+    store.set('copilotAccessToken', normalized)
     return true
   },
 )
