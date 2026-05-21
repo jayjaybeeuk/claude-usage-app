@@ -710,7 +710,7 @@ ipcMain.handle(IpcChannels.FETCH_USAGE_DATA, async () => {
   }
 
   const data = usageResult.value as UsageData
-  debugLogToRenderer('Raw usage API response:', data)
+  debugLogToRenderer('[Claude] Raw usage API response:', data)
 
   const toNumber = (value: unknown): number | undefined => {
     if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -754,7 +754,7 @@ ipcMain.handle(IpcChannels.FETCH_USAGE_DATA, async () => {
   // Merge overage spending data into data.extra_usage
   if (overageResult.status === 'fulfilled' && overageResult.value) {
     const overage = overageResult.value as Record<string, unknown>
-    debugLogToRenderer('Raw overage API response:', overage)
+    debugLogToRenderer('[Claude] Raw overage API response:', overage)
     const normalizedFromOverage = normalizeExtraUsage(overage)
     const hasUsageSpending = data.extra_usage?.used_cents != null && data.extra_usage?.limit_cents != null
     // Only fall back to overage API if usage response did not include spending fields.
@@ -771,7 +771,7 @@ ipcMain.handle(IpcChannels.FETCH_USAGE_DATA, async () => {
   // Merge prepaid balance into data.extra_usage
   if (prepaidResult.status === 'fulfilled' && prepaidResult.value) {
     const prepaid = prepaidResult.value as Record<string, unknown>
-    debugLogToRenderer('Raw prepaid API response:', prepaid)
+    debugLogToRenderer('[Claude] Raw prepaid API response:', prepaid)
     if (typeof prepaid.amount === 'number') {
       if (!data.extra_usage) data.extra_usage = {}
       data.extra_usage.balance_cents = prepaid.amount
@@ -1201,7 +1201,7 @@ ipcMain.handle(IpcChannels.FETCH_CODEX_USAGE, async () => {
     }
 
     const raw = (await response.json()) as Record<string, unknown>
-    debugLogToRenderer('Raw Codex usage API response:', raw)
+    debugLogToRenderer('[Codex] Raw usage API response:', raw)
 
     const data = parseCodexUsageResponse(raw)
     store.set('cachedCodexUsageData', data)
@@ -1463,6 +1463,7 @@ ipcMain.handle(IpcChannels.FETCH_GEMINI_USAGE, async () => {
       },
     }
 
+    debugLogToRenderer('[Gemini] Raw usage API response:', data)
     store.set('cachedGeminiUsageData', data)
     store.set('cachedGeminiUsageTimestamp', Date.now())
     return data

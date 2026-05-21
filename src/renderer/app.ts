@@ -7,8 +7,7 @@ import { resizeWidget, resizeForSettings, restoreNonSettingsHeight, WIDGET_HEIGH
 import { debugLog } from './ui/utils'
 import { ClaudeProvider } from './providers/ClaudeProvider'
 import { CodexProvider } from './providers/CodexProvider'
-// Copilot frontend is disabled until its auth/usage integration is reliable.
-// import { CopilotProvider } from './providers/CopilotProvider'
+import { CopilotProvider } from './providers/CopilotProvider'
 import { GeminiProvider } from './providers/GeminiProvider'
 
 // Application state
@@ -25,7 +24,7 @@ function handleResize(): void {
     codexHasData: codexProvider.hasData,
     isCodexGraphVisible: codexProvider.isCodexGraphVisible,
     isCodexPieVisible: codexProvider.isCodexPieVisible,
-    copilotHasData: false,
+    copilotHasData: copilotProvider.hasData,
     geminiHasData: geminiProvider.hasData,
   })
 }
@@ -58,7 +57,7 @@ const claudeProvider = new ClaudeProvider({
     if (isLoggedIn) {
       showMainContent()
       void codexProvider.init()
-      // void copilotProvider.init()
+      void copilotProvider.init()
       void geminiProvider.init()
       void refreshAllUsageData()
       startAutoUpdate()
@@ -73,10 +72,10 @@ const codexProvider = new CodexProvider({
   onDataChange: refreshAllUsageData,
 })
 
-// const copilotProvider = new CopilotProvider({
-//   onResize: handleResize,
-//   onDataChange: refreshAllUsageData,
-// })
+const copilotProvider = new CopilotProvider({
+  onResize: handleResize,
+  onDataChange: refreshAllUsageData,
+})
 
 const geminiProvider = new GeminiProvider({
   onResize: handleResize,
@@ -86,7 +85,7 @@ const geminiProvider = new GeminiProvider({
 async function refreshAllUsageData(): Promise<void> {
   await claudeProvider.fetchData()
   await codexProvider.fetchData()
-  // await copilotProvider.fetchData()
+  await copilotProvider.fetchData()
   await geminiProvider.fetchData()
 
   const claudeData = claudeProvider.latestUsageData
@@ -342,6 +341,6 @@ window.addEventListener('beforeunload', () => {
   claudeProvider.destroy()
   stopAutoUpdate()
   codexProvider.destroy()
-  // copilotProvider.destroy()
+  copilotProvider.destroy()
   geminiProvider.destroy()
 })
