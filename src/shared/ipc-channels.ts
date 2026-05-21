@@ -44,9 +44,10 @@ export const IpcChannels = {
 
   // Copilot invoke channels
   GET_COPILOT_CREDENTIALS: 'get-copilot-credentials',
-  SAVE_COPILOT_CREDENTIALS: 'save-copilot-credentials',
   DELETE_COPILOT_CREDENTIALS: 'delete-copilot-credentials',
-  DETECT_COPILOT_TOKEN: 'detect-copilot-token',
+  COPILOT_GET_CLIENT_ID: 'copilot-get-client-id',
+  COPILOT_SET_CLIENT_ID: 'copilot-set-client-id',
+  COPILOT_START_DEVICE_FLOW: 'copilot-start-device-flow',
   FETCH_COPILOT_USAGE: 'fetch-copilot-usage',
   GET_CACHED_COPILOT_USAGE: 'get-cached-copilot-usage',
 
@@ -55,5 +56,7 @@ export const IpcChannels = {
   SESSION_EXPIRED: 'session-expired',
   CODEX_SESSION_EXPIRED: 'codex-session-expired',
   COPILOT_SESSION_EXPIRED: 'copilot-session-expired',
+  COPILOT_AUTH_SUCCESS: 'copilot-auth-success',
+  COPILOT_AUTH_FAILED: 'copilot-auth-failed',
   DEBUG_LOG: 'debug-log',
 } as const

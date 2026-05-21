@@ -1,6 +1,6 @@
 import './styles.css'
 import { DEFAULT_REFRESH_MINUTES, MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES } from '../shared/refresh-interval'
-import type { Credentials, UsageData, UsageTimePeriod, ExtraUsage, UsageHistoryEntry, CodexUsageData } from '../shared/ipc-types'
+import type { Credentials, UsageData, UsageTimePeriod, ExtraUsage, UsageHistoryEntry, CodexUsageData, CopilotUsageData } from '../shared/ipc-types'
 
 // Application state
 let credentials: Credentials | null = null
@@ -36,6 +36,15 @@ const CODEX_LOGIN_HEIGHT = CODEX_SECTION_BASE_HEIGHT + 20
 const CODEX_GRAPH_HEIGHT = 170
 const CODEX_PIE_HEIGHT = 162
 const CODEX_STATUS_HEIGHT = 34
+
+// Copilot state
+let copilotHasData = false
+let latestCopilotData: CopilotUsageData | null = null
+let copilotLastRefreshTime: number | null = null
+let copilotStatusInterval: ReturnType<typeof setInterval> | null = null
+const COPILOT_SECTION_BASE_HEIGHT = 28 + 32 // divider + 1 usage row
+const COPILOT_STATUS_HEIGHT = 34
+const COPILOT_LOGIN_HEIGHT = COPILOT_SECTION_BASE_HEIGHT + 20
 const WIDGET_HEIGHT_BUFFER = 8
 
 // Debug logging — only shows in DevTools (development mode).
@@ -181,6 +190,30 @@ const elements = {
   codexWeeklyTimer: getElement<SVGCircleElement>('codexWeeklyTimer'),
   codexWeeklyTimeText: getElement<HTMLDivElement>('codexWeeklyTimeText'),
   codexWeeklyUsageRing: getElement<SVGCircleElement>('codexWeeklyUsageRing'),
+
+  // Copilot
+  copilotSection: getElement<HTMLDivElement>('copilotSection'),
+  copilotLoginContainer: getElement<HTMLDivElement>('copilotLoginContainer'),
+  copilotContent: getElement<HTMLDivElement>('copilotContent'),
+  copilotLoginPrompt: getElement<HTMLDivElement>('copilotLoginPrompt'),
+  copilotConnectBtn: getElement<HTMLButtonElement>('copilotConnectBtn'),
+  copilotLoginError: getElement<HTMLParagraphElement>('copilotLoginError'),
+  copilotClientIdSetup: getElement<HTMLDivElement>('copilotClientIdSetup'),
+  copilotClientIdInput: getElement<HTMLInputElement>('copilotClientIdInput'),
+  copilotClientIdSaveBtn: getElement<HTMLButtonElement>('copilotClientIdSaveBtn'),
+  copilotClientIdError: getElement<HTMLParagraphElement>('copilotClientIdError'),
+  copilotClientIdBackBtn: getElement<HTMLButtonElement>('copilotClientIdBackBtn'),
+  copilotDeviceFlow: getElement<HTMLDivElement>('copilotDeviceFlow'),
+  copilotUserCode: getElement<HTMLDivElement>('copilotUserCode'),
+  copilotOpenGithubBtn: getElement<HTMLButtonElement>('copilotOpenGithubBtn'),
+  copilotCancelFlowBtn: getElement<HTMLButtonElement>('copilotCancelFlowBtn'),
+  copilotWaitingText: getElement<HTMLParagraphElement>('copilotWaitingText'),
+  copilotPlanSubtitle: getElement<HTMLSpanElement>('copilotPlanSubtitle'),
+  copilotPremiumProgress: getElement<HTMLDivElement>('copilotPremiumProgress'),
+  copilotPremiumPercentage: getElement<HTMLSpanElement>('copilotPremiumPercentage'),
+  copilotCountText: getElement<HTMLDivElement>('copilotCountText'),
+  copilotStatusText: getElement<HTMLSpanElement>('copilotStatusText'),
+  copilotResetText: getElement<HTMLSpanElement>('copilotResetText'),
 }
 
 function clampRefreshMinutes(value: number): number {
@@ -212,6 +245,7 @@ async function loadRefreshInterval(): Promise<void> {
 async function refreshAllUsageData(): Promise<void> {
   await fetchUsageData()
   await fetchCodexUsageData()
+  await fetchCopilotUsageData()
 }
 
 async function setRefreshIntervalMinutes(minutes: number): Promise<void> {
@@ -351,6 +385,7 @@ async function init(): Promise<void> {
   if (credentials.sessionKey && credentials.organizationId) {
     showMainContent()
     await initCodexSection()
+    await initCopilotSection()
     await refreshAllUsageData()
     startAutoUpdate()
   } else {
@@ -573,6 +608,45 @@ function setupEventListeners(): void {
     showCodexLogin()
     resizeWidget()
   })
+
+  // Copilot OAuth Device Flow
+  elements.copilotConnectBtn.addEventListener('click', () => { void handleCopilotConnect() })
+
+  elements.copilotClientIdBackBtn.addEventListener('click', () => {
+    elements.copilotClientIdSetup.style.display = 'none'
+    elements.copilotLoginPrompt.style.display = ''
+    elements.copilotClientIdError.textContent = ''
+  })
+  elements.copilotClientIdSaveBtn.addEventListener('click', () => { void handleCopilotClientIdSave() })
+  elements.copilotClientIdInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') void handleCopilotClientIdSave()
+  })
+
+  elements.copilotCancelFlowBtn.addEventListener('click', () => {
+    elements.copilotDeviceFlow.style.display = 'none'
+    elements.copilotLoginPrompt.style.display = ''
+  })
+
+  window.electronAPI.onCopilotAuthSuccess(() => {
+    elements.copilotDeviceFlow.style.display = 'none'
+    elements.copilotLoginPrompt.style.display = ''
+    void fetchCopilotUsageData()
+    resizeWidget()
+  })
+
+  window.electronAPI.onCopilotAuthFailed((error: string) => {
+    elements.copilotDeviceFlow.style.display = 'none'
+    elements.copilotLoginPrompt.style.display = ''
+    elements.copilotLoginError.textContent = error || 'Authorization failed — please try again'
+  })
+
+  window.electronAPI.onCopilotSessionExpired(() => {
+    debugLog('Copilot session expired')
+    latestCopilotData = null
+    copilotHasData = false
+    showCopilotLogin()
+    resizeWidget()
+  })
 }
 
 // Handle manual sessionKey connect
@@ -595,6 +669,7 @@ async function handleConnect(): Promise<void> {
       elements.sessionKeyInput.value = ''
       showMainContent()
       await initCodexSection()
+      await initCopilotSection()
       await refreshAllUsageData()
       startAutoUpdate()
     } else {
@@ -636,6 +711,7 @@ async function handleAutoDetect(): Promise<void> {
       })
       showMainContent()
       await initCodexSection()
+      await initCopilotSection()
       await refreshAllUsageData()
       startAutoUpdate()
     } else {
@@ -906,6 +982,13 @@ function resizeWidget(): void {
     }
   } else {
     height += CODEX_LOGIN_HEIGHT
+  }
+
+  // Copilot section
+  if (copilotHasData) {
+    height += COPILOT_SECTION_BASE_HEIGHT + COPILOT_STATUS_HEIGHT
+  } else {
+    height += COPILOT_LOGIN_HEIGHT
   }
 
   // Ensure window is never smaller than actual rendered content (and can still retract).
@@ -1432,6 +1515,206 @@ async function handleCodexManualToken(): Promise<void> {
   } finally {
     elements.codexSaveBtn.disabled = false
     elements.codexSaveBtn.textContent = 'Save'
+  }
+}
+
+// ─── Copilot Section ─────────────────────────────────────────────────────────
+
+function updateCopilotStatusText(): void {
+  if (!copilotLastRefreshTime) return
+  const ago = Math.floor((Date.now() - copilotLastRefreshTime) / 1000)
+  if (ago < 60) {
+    elements.copilotStatusText.textContent = 'Refreshed just now'
+  } else if (ago < 3600) {
+    const mins = Math.floor(ago / 60)
+    elements.copilotStatusText.textContent = `Refreshed ${mins}m ago`
+  } else {
+    const hrs = Math.floor(ago / 3600)
+    elements.copilotStatusText.textContent = `Refreshed ${hrs}h ago`
+  }
+}
+
+function startCopilotStatusTimer(): void {
+  stopCopilotStatusTimer()
+  copilotStatusInterval = setInterval(updateCopilotStatusText, 30_000)
+}
+
+function stopCopilotStatusTimer(): void {
+  if (copilotStatusInterval) {
+    clearInterval(copilotStatusInterval)
+    copilotStatusInterval = null
+  }
+}
+
+async function initCopilotSection(): Promise<void> {
+  const creds = await window.electronAPI.getCopilotCredentials()
+  if (creds.accessToken) {
+    showCopilotContent()
+    updateCopilotUI(latestCopilotData ?? ({} as CopilotUsageData))
+    elements.copilotStatusText.textContent = 'Refreshing...'
+    resizeWidget()
+  } else {
+    showCopilotLogin()
+    resizeWidget()
+  }
+}
+
+function showCopilotLogin(): void {
+  copilotHasData = false
+  elements.copilotLoginContainer.style.display = 'block'
+  elements.copilotContent.style.display = 'none'
+  elements.copilotDeviceFlow.style.display = 'none'
+  elements.copilotClientIdSetup.style.display = 'none'
+  elements.copilotLoginPrompt.style.display = ''
+  elements.copilotLoginError.textContent = ''
+  stopCopilotStatusTimer()
+  elements.copilotStatusText.textContent = 'Connect Copilot to load usage'
+}
+
+function showCopilotContent(): void {
+  elements.copilotLoginContainer.style.display = 'none'
+  elements.copilotContent.style.display = 'block'
+  copilotHasData = true
+}
+
+async function fetchCopilotUsageData(): Promise<void> {
+  try {
+    const data = await window.electronAPI.fetchCopilotUsageData()
+    latestCopilotData = data
+    showCopilotContent()
+    updateCopilotUI(data)
+    copilotLastRefreshTime = Date.now()
+    updateCopilotStatusText()
+    startCopilotStatusTimer()
+    resizeWidget()
+  } catch (error) {
+    const err = error as Error
+    if (
+      err.message.includes('CopilotSessionExpired') ||
+      err.message.includes('Missing Copilot') ||
+      err.message.includes('CopilotCredentialDecryptFailed')
+    ) {
+      copilotHasData = false
+      showCopilotLogin()
+    } else {
+      const cached = await window.electronAPI.getCachedCopilotUsage()
+      if (cached) {
+        latestCopilotData = cached.data
+        showCopilotContent()
+        updateCopilotUI(cached.data)
+        copilotLastRefreshTime = cached.timestamp
+        updateCopilotStatusText()
+        startCopilotStatusTimer()
+        resizeWidget()
+      } else {
+        copilotHasData = false
+        showCopilotLogin()
+        elements.copilotLoginError.textContent = err.message || 'Failed to fetch. Try reconnecting.'
+      }
+    }
+  }
+}
+
+function formatCopilotPlan(plan: string): string {
+  const labels: Record<string, string> = {
+    free: 'Free',
+    pro: 'Pro',
+    pro_plus: 'Pro+',
+    business: 'Business',
+    enterprise: 'Enterprise',
+  }
+  return `GitHub Copilot ${labels[plan] ?? plan}`
+}
+
+function formatResetDate(isoDate: string): string {
+  if (!isoDate) return ''
+  try {
+    const d = new Date(isoDate)
+    return `Resets ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+  } catch {
+    return ''
+  }
+}
+
+function formatBillingMonth(year: number, month: number): string {
+  if (!year || !month) return ''
+  try {
+    return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+  } catch {
+    return `${year}-${String(month).padStart(2, '0')}`
+  }
+}
+
+function updateCopilotUI(data: CopilotUsageData): void {
+  const consumed = data.totalConsumed ?? 0
+  const entitlement = data.entitlement ?? 0
+  const percentUsed = entitlement > 0 ? Math.min(100, (consumed / entitlement) * 100) : 0
+
+  updateProgressBar(elements.copilotPremiumProgress, elements.copilotPremiumPercentage, percentUsed)
+
+  if (entitlement > 0) {
+    elements.copilotCountText.textContent = `${consumed} / ${entitlement}`
+  } else if (consumed > 0) {
+    elements.copilotCountText.textContent = `${consumed} requests`
+  } else {
+    elements.copilotCountText.textContent = '--'
+  }
+
+  elements.copilotPlanSubtitle.textContent = data.copilot_plan
+    ? formatCopilotPlan(data.copilot_plan)
+    : 'GitHub Premium Requests'
+
+  const period = formatBillingMonth(data.billingYear, data.billingMonth)
+  elements.copilotResetText.textContent = period ? `${period}` : ''
+}
+
+async function handleCopilotConnect(): Promise<void> {
+  elements.copilotLoginError.textContent = ''
+  const clientId = await window.electronAPI.copilotGetClientId()
+  if (!clientId) {
+    elements.copilotLoginPrompt.style.display = 'none'
+    elements.copilotClientIdSetup.style.display = 'block'
+    elements.copilotClientIdInput.focus()
+    return
+  }
+  await startCopilotDeviceFlow()
+}
+
+async function handleCopilotClientIdSave(): Promise<void> {
+  const clientId = elements.copilotClientIdInput.value.trim()
+  if (!clientId) {
+    elements.copilotClientIdError.textContent = 'Please enter your GitHub OAuth Client ID'
+    return
+  }
+  elements.copilotClientIdSaveBtn.disabled = true
+  elements.copilotClientIdSaveBtn.textContent = '...'
+  elements.copilotClientIdError.textContent = ''
+  try {
+    await window.electronAPI.copilotSetClientId(clientId)
+    elements.copilotClientIdInput.value = ''
+    elements.copilotClientIdSetup.style.display = 'none'
+    elements.copilotLoginPrompt.style.display = ''
+    await startCopilotDeviceFlow()
+  } catch (err) {
+    elements.copilotClientIdError.textContent = (err as Error).message || 'Failed to save Client ID'
+  } finally {
+    elements.copilotClientIdSaveBtn.disabled = false
+    elements.copilotClientIdSaveBtn.textContent = 'Save'
+  }
+}
+
+async function startCopilotDeviceFlow(): Promise<void> {
+  elements.copilotLoginError.textContent = ''
+  try {
+    const result = await window.electronAPI.copilotStartDeviceFlow()
+    elements.copilotLoginPrompt.style.display = 'none'
+    elements.copilotUserCode.textContent = result.user_code
+    elements.copilotOpenGithubBtn.onclick = () => {
+      window.electronAPI.openExternal(result.verification_uri)
+    }
+    elements.copilotDeviceFlow.style.display = 'block'
+  } catch (err) {
+    elements.copilotLoginError.textContent = (err as Error).message || 'Failed to start authorization'
   }
 }
 

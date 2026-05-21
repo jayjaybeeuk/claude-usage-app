@@ -30,7 +30,7 @@ import type {
   CodexUsageData,
   CachedCodexUsageData,
   CopilotCredentials,
-  SaveCopilotCredentialsPayload,
+  CopilotDeviceFlowResult,
   CopilotUsageData,
   CachedCopilotUsageData,
 } from '../shared/ipc-types'
@@ -53,7 +53,8 @@ interface StoreSchema {
   codexCookieName: string             // Name of the captured auth cookie
   cachedCodexUsageData: CodexUsageData
   cachedCodexUsageTimestamp: number
-  copilotAccessToken: string          // GitHub PAT encrypted via safeStorage (stored as base64)
+  copilotClientId: string             // GitHub OAuth App client_id (not a secret)
+  copilotAccessToken: string          // GitHub OAuth token encrypted via safeStorage (stored as base64)
   cachedCopilotUsageData: CopilotUsageData
   cachedCopilotUsageTimestamp: number
   autoStartEnabled: boolean           // Whether app should start with system
@@ -888,6 +889,84 @@ function parseCodexUsageResponse(raw: Record<string, unknown>): CodexUsageData {
   return result
 }
 
+// GET /users/{username}/settings/billing/premium_request/usage
+const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code'
+const GITHUB_OAUTH_TOKEN_URL = 'https://github.com/login/oauth/access_token'
+const COPILOT_INTERNAL_TOKEN_URL = 'https://api.github.com/copilot_internal/v2/token'
+
+function parseCopilotTokenResponse(tokenData: Record<string, unknown>): CopilotUsageData {
+  const plan = (tokenData.copilot_plan as string | undefined) ??
+               (tokenData.sku as string | undefined) ?? ''
+  const prField = (tokenData.premium_requests as Record<string, unknown> | undefined) ?? {}
+  const entitlement = Number((prField.quota as number | undefined) ?? 0)
+  const totalConsumed = Number((prField.used as number | undefined) ?? 0)
+  const now = new Date()
+  return {
+    copilot_plan: plan,
+    totalConsumed,
+    entitlement,
+    billingYear: now.getFullYear(),
+    billingMonth: now.getMonth() + 1,
+    usageItems: [],
+  }
+}
+
+function startCopilotDeviceFlowPoll(deviceCode: string, intervalSecs: number, expiresIn: number): void {
+  const expiresAt = Date.now() + expiresIn * 1000
+  let currentInterval = intervalSecs
+  const clientId = (store.get('copilotClientId') as string | undefined) ?? ''
+
+  const poll = async (): Promise<void> => {
+    if (Date.now() >= expiresAt) {
+      mainWindow?.webContents.send(IpcChannels.COPILOT_AUTH_FAILED, 'Authorization code expired — please try again')
+      return
+    }
+    try {
+      const resp = await session.defaultSession.fetch(GITHUB_OAUTH_TOKEN_URL, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': USER_AGENT },
+        body: JSON.stringify({
+          client_id: clientId,
+          device_code: deviceCode,
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        }),
+      })
+      const data = (await resp.json()) as Record<string, unknown>
+      if (data.access_token) {
+        const encrypted = encryptSecret(data.access_token as string)
+        if (!encrypted) {
+          mainWindow?.webContents.send(IpcChannels.COPILOT_AUTH_FAILED, 'Failed to encrypt token')
+          return
+        }
+        store.set('copilotAccessToken', encrypted)
+        mainWindow?.webContents.send(IpcChannels.COPILOT_AUTH_SUCCESS)
+        return
+      }
+      if (data.error === 'slow_down') {
+        currentInterval = ((data.interval as number | undefined) ?? currentInterval) + 5
+      } else if (data.error === 'access_denied' || data.error === 'expired_token') {
+        const msg = (data.error_description as string | undefined) ?? (data.error as string)
+        mainWindow?.webContents.send(IpcChannels.COPILOT_AUTH_FAILED, msg)
+        return
+      }
+      // authorization_pending — keep polling
+    } catch {
+      // ignore transient network errors, keep polling
+    }
+    setTimeout(() => { void poll() }, currentInterval * 1000)
+  }
+  setTimeout(() => { void poll() }, currentInterval * 1000)
+}
+
+function clearCopilotCredentials(): void {
+  store.delete('copilotAccessToken' as keyof StoreSchema)
+  store.delete('cachedCopilotUsageData' as keyof StoreSchema)
+  store.delete('cachedCopilotUsageTimestamp' as keyof StoreSchema)
+  if (mainWindow) {
+    mainWindow.webContents.send(IpcChannels.COPILOT_SESSION_EXPIRED)
+  }
+}
+
 const CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
 const CODEX_LOGIN_URL = 'https://chatgpt.com/login'
 const CODEX_TOKEN_COOKIES = [
@@ -1220,27 +1299,9 @@ ipcMain.handle(IpcChannels.GET_CACHED_CODEX_USAGE, (): CachedCodexUsageData | nu
 // ─── Copilot IPC Handlers ─────────────────────────────────────────────────────
 
 ipcMain.handle(IpcChannels.GET_COPILOT_CREDENTIALS, (): CopilotCredentials => {
-  const stored = store.get('copilotAccessToken') ?? null
-  return {
-    accessToken: stored ? decryptSecret(stored) : null,
-  }
+  const stored = (store.get('copilotAccessToken') as string | undefined) ?? null
+  return { accessToken: stored ? decryptSecret(stored) : null }
 })
-
-ipcMain.handle(
-  IpcChannels.SAVE_COPILOT_CREDENTIALS,
-  (_event: Electron.IpcMainInvokeEvent, { accessToken }: SaveCopilotCredentialsPayload) => {
-    const normalized = normalizeBearerToken(accessToken)
-    if (!normalized) {
-      throw new Error('Missing Copilot credentials')
-    }
-    const encrypted = encryptSecret(normalized)
-    if (!encrypted) {
-      throw new Error('Failed to encrypt Copilot credentials: OS-backed encryption unavailable or failed')
-    }
-    store.set('copilotAccessToken', encrypted)
-    return true
-  },
-)
 
 ipcMain.handle(IpcChannels.DELETE_COPILOT_CREDENTIALS, () => {
   store.delete('copilotAccessToken' as keyof StoreSchema)
@@ -1249,17 +1310,59 @@ ipcMain.handle(IpcChannels.DELETE_COPILOT_CREDENTIALS, () => {
   return true
 })
 
-ipcMain.handle(IpcChannels.DETECT_COPILOT_TOKEN, async () => {
-  // TODO (JAY-5): Cookie-based detection is unlikely to work for the GitHub billing endpoint.
-  // This stub always returns not-found, prompting the user to enter a PAT manually.
-  return { success: false, error: 'Auto-detect not supported for Copilot — please enter a PAT manually.' }
+ipcMain.handle(IpcChannels.COPILOT_GET_CLIENT_ID, (): string => {
+  return (store.get('copilotClientId') as string | undefined) ?? ''
+})
+
+ipcMain.handle(IpcChannels.COPILOT_SET_CLIENT_ID, (_event: Electron.IpcMainInvokeEvent, clientId: string) => {
+  store.set('copilotClientId', clientId.trim())
+})
+
+ipcMain.handle(IpcChannels.COPILOT_START_DEVICE_FLOW, async (): Promise<CopilotDeviceFlowResult> => {
+  const clientId = (store.get('copilotClientId') as string | undefined) ?? ''
+  if (!clientId) {
+    throw new Error('No GitHub OAuth Client ID configured')
+  }
+  const resp = await session.defaultSession.fetch(GITHUB_DEVICE_CODE_URL, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': USER_AGENT },
+    body: JSON.stringify({ client_id: clientId, scope: 'copilot' }),
+  })
+  if (!resp.ok) {
+    throw new Error(`DeviceFlowInitFailed:${resp.status}`)
+  }
+  const data = (await resp.json()) as {
+    device_code: string; user_code: string; verification_uri: string; expires_in: number; interval: number
+  }
+  startCopilotDeviceFlowPoll(data.device_code, data.interval, data.expires_in)
+  return { user_code: data.user_code, verification_uri: data.verification_uri, expires_in: data.expires_in, interval: data.interval }
 })
 
 ipcMain.handle(IpcChannels.FETCH_COPILOT_USAGE, async (): Promise<CopilotUsageData> => {
-  // TODO (JAY-5): Implement actual GitHub Copilot billing API fetch.
-  // Requires PAT with `copilot` scope (GET /user/copilot) and Plan:Read-only
-  // scope (GET /users/{username}/settings/billing/premium_request/usage).
-  throw new Error('Copilot usage fetch not yet implemented')
+  const stored = store.get('copilotAccessToken') as string | undefined
+  if (!stored) throw new Error('Missing Copilot credentials')
+
+  const oauthToken = decryptSecret(stored)
+  if (!oauthToken) throw new Error('CopilotCredentialDecryptFailed')
+
+  const resp = await session.defaultSession.fetch(COPILOT_INTERNAL_TOKEN_URL, {
+    headers: { Authorization: `Bearer ${oauthToken}`, 'User-Agent': USER_AGENT, Accept: 'application/json' },
+  })
+  debugLog(`Copilot internal token fetch => ${resp.status}`)
+  if (resp.status === 401 || resp.status === 403) {
+    clearCopilotCredentials()
+    throw new Error('CopilotSessionExpired')
+  }
+  if (!resp.ok) {
+    throw new Error(`CopilotTokenFetchFailed:${resp.status}`)
+  }
+  const tokenData = (await resp.json()) as Record<string, unknown>
+  debugLogToRenderer('Raw Copilot internal token response:', tokenData)
+
+  const data = parseCopilotTokenResponse(tokenData)
+  store.set('cachedCopilotUsageData', data)
+  store.set('cachedCopilotUsageTimestamp', Date.now())
+  return data
 })
 
 ipcMain.handle(IpcChannels.GET_CACHED_COPILOT_USAGE, (): CachedCopilotUsageData | null => {

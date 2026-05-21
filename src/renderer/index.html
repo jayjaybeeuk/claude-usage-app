@@ -295,6 +295,69 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Copilot Section -->
+            <div id="copilotSection">
+                <!-- Copilot Login -->
+                <div id="copilotLoginContainer">
+                    <div class="service-divider copilot-divider">
+                        <span class="service-divider-label">Copilot</span>
+                        <span class="service-divider-subtitle">GitHub Premium Requests</span>
+                    </div>
+                    <!-- Step 1: prompt -->
+                    <div id="copilotLoginPrompt" class="codex-login-row">
+                        <span class="codex-login-text">Connect GitHub Copilot</span>
+                        <p class="codex-login-error" id="copilotLoginError"></p>
+                        <button class="codex-manual-btn" id="copilotConnectBtn">Connect with GitHub →</button>
+                    </div>
+                    <!-- Step 2: enter OAuth App client ID (one-time setup) -->
+                    <div id="copilotClientIdSetup" style="display: none;">
+                        <p class="copilot-device-instruction">Create a GitHub OAuth App with <strong>Device Flow</strong> enabled at github.com/settings/developers, then enter the Client ID:</p>
+                        <div class="codex-token-row">
+                            <input type="text" id="copilotClientIdInput" placeholder="GitHub OAuth App Client ID..." spellcheck="false" autocomplete="off">
+                            <button class="codex-save-btn" id="copilotClientIdSaveBtn">Save</button>
+                        </div>
+                        <div class="codex-token-footer">
+                            <p class="codex-token-error" id="copilotClientIdError"></p>
+                            <button class="back-step-btn" id="copilotClientIdBackBtn">← Back</button>
+                        </div>
+                    </div>
+                    <!-- Step 3: device flow — show user code -->
+                    <div id="copilotDeviceFlow" style="display: none;">
+                        <p class="copilot-device-instruction">Visit <strong>github.com/login/device</strong> and enter:</p>
+                        <div class="copilot-user-code" id="copilotUserCode">XXXX-XXXX</div>
+                        <div class="copilot-device-actions">
+                            <button class="codex-save-btn" id="copilotOpenGithubBtn">Open GitHub →</button>
+                            <button class="back-step-btn" id="copilotCancelFlowBtn">Cancel</button>
+                        </div>
+                        <p class="copilot-waiting-text" id="copilotWaitingText">Waiting for authorization...</p>
+                    </div>
+                </div>
+
+                <!-- Copilot Usage Content -->
+                <div id="copilotContent" style="display: none;">
+                    <div class="service-divider copilot-divider">
+                        <span class="service-divider-label">Copilot</span>
+                        <span class="service-divider-subtitle" id="copilotPlanSubtitle">GitHub Premium Requests</span>
+                    </div>
+                    <!-- Premium Requests -->
+                    <div class="usage-section">
+                        <span class="usage-label">Premium Reqs</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill copilot" id="copilotPremiumProgress" style="width: 0%"></div>
+                        </div>
+                        <span class="usage-percentage" id="copilotPremiumPercentage">0%</span>
+                        <div class="timer-container">
+                            <div class="copilot-count-text" id="copilotCountText">--</div>
+                        </div>
+                    </div>
+
+                    <div class="copilot-status-bar">
+                        <span class="status-text" id="copilotStatusText">Refreshed just now</span>
+                        <span class="copilot-reset-text" id="copilotResetText"></span>
+                    </div>
+                </div>
+            </div>
             </div>
 
             <!-- Settings Overlay -->

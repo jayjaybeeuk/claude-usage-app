@@ -87,14 +87,20 @@ const api = {
   },
   // Copilot
   getCopilotCredentials: () => ipcRenderer.invoke('get-copilot-credentials'),
-  saveCopilotCredentials: (credentials: { accessToken: string }) =>
-    ipcRenderer.invoke('save-copilot-credentials', credentials),
   deleteCopilotCredentials: () => ipcRenderer.invoke('delete-copilot-credentials'),
-  detectCopilotToken: () => ipcRenderer.invoke('detect-copilot-token'),
+  copilotGetClientId: () => ipcRenderer.invoke('copilot-get-client-id'),
+  copilotSetClientId: (clientId: string) => ipcRenderer.invoke('copilot-set-client-id', clientId),
+  copilotStartDeviceFlow: () => ipcRenderer.invoke('copilot-start-device-flow'),
   fetchCopilotUsageData: () => ipcRenderer.invoke('fetch-copilot-usage'),
   getCachedCopilotUsage: () => ipcRenderer.invoke('get-cached-copilot-usage'),
   onCopilotSessionExpired: (callback: () => void) => {
     ipcRenderer.on('copilot-session-expired', () => callback())
+  },
+  onCopilotAuthSuccess: (callback: () => void) => {
+    ipcRenderer.on('copilot-auth-success', () => callback())
+  },
+  onCopilotAuthFailed: (callback: (error: string) => void) => {
+    ipcRenderer.on('copilot-auth-failed', (_event, error: string) => callback(error))
   },
 }
 

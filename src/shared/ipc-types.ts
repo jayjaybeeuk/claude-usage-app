@@ -115,23 +115,27 @@ export interface CopilotCredentials {
   accessToken: string | null
 }
 
-export interface SaveCopilotCredentialsPayload {
-  accessToken: string
+export interface CopilotDeviceFlowResult {
+  user_code: string
+  verification_uri: string
+  expires_in: number
+  interval: number
 }
 
-export interface DetectCopilotResult {
-  success: boolean
-  accessToken?: string
-  error?: string
+export interface CopilotUsageItem {
+  product: string
+  sku: string
+  model: string
+  grossQuantity: number
 }
 
 export interface CopilotUsageData {
-  copilot_plan: 'free' | 'pro' | 'pro_plus' | 'business' | 'enterprise'
-  consumed: number
-  entitlement: number
-  remaining: number
-  percent_remaining: number
-  quota_reset_date: string
+  copilot_plan: string            // 'free' | 'pro' | 'pro_plus' | 'business' | 'enterprise' | ''
+  totalConsumed: number           // sum of all grossQuantity values this billing period
+  entitlement: number             // monthly quota, 0 if unknown
+  billingYear: number
+  billingMonth: number            // 1–12
+  usageItems: CopilotUsageItem[]  // per-model/product breakdown
 }
 
 export interface CachedCopilotUsageData {
@@ -183,10 +187,13 @@ export interface ElectronAPI {
   onCodexSessionExpired: (callback: () => void) => void
   // Copilot
   getCopilotCredentials: () => Promise<CopilotCredentials>
-  saveCopilotCredentials: (credentials: SaveCopilotCredentialsPayload) => Promise<boolean>
   deleteCopilotCredentials: () => Promise<boolean>
-  detectCopilotToken: () => Promise<DetectCopilotResult>
+  copilotGetClientId: () => Promise<string>
+  copilotSetClientId: (clientId: string) => Promise<void>
+  copilotStartDeviceFlow: () => Promise<CopilotDeviceFlowResult>
   fetchCopilotUsageData: () => Promise<CopilotUsageData>
   getCachedCopilotUsage: () => Promise<CachedCopilotUsageData | null>
   onCopilotSessionExpired: (callback: () => void) => void
+  onCopilotAuthSuccess: (callback: () => void) => void
+  onCopilotAuthFailed: (callback: (error: string) => void) => void
 }

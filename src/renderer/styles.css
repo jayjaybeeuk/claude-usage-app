@@ -24,6 +24,9 @@
     --primary-lighter: var(--claude-primary-lighter);
     --primary-hover: var(--claude-primary-hover);
     --primary-text: #ffffff;
+    --copilot-primary: #f59e0b;
+    --copilot-primary-rgb: 245, 158, 11;
+    --copilot-primary-light: #fbbf24;
 }
 
 /* Theme definitions */
@@ -1539,4 +1542,71 @@ input:checked + .toggle-slider:before {
 
 .usage-ring.codex-weekly {
     stroke: var(--codex-secondary);
+}
+
+/* ─── Copilot Section ──────────────────────────────────────────────────────── */
+
+.copilot-divider .service-divider-label {
+    color: var(--copilot-primary);
+}
+
+.progress-fill.copilot {
+    background: linear-gradient(90deg, var(--copilot-primary) 0%, var(--copilot-primary-light) 100%);
+    box-shadow: 0 0 10px rgba(var(--copilot-primary-rgb), 0.3);
+}
+
+.copilot-count-text {
+    color: #e0e0e0;
+    font-size: 11px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.copilot-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 16px 6px;
+    gap: 8px;
+}
+
+.copilot-reset-text {
+    color: #606060;
+    font-size: 9px;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.copilot-device-instruction {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin: 4px 12px 6px;
+    line-height: 1.4;
+}
+
+.copilot-user-code {
+    font-family: monospace;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--copilot-primary-light);
+    text-align: center;
+    margin: 4px 0 8px;
+    user-select: text;
+}
+
+.copilot-device-actions {
+    display: flex;
+    gap: 8px;
+    padding: 0 12px;
+    margin-bottom: 6px;
+}
+
+.copilot-waiting-text {
+    font-size: 10px;
+    color: var(--text-secondary);
+    text-align: center;
+    margin: 0 0 6px;
+    opacity: 0.7;
 }
