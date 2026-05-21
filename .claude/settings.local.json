@@ -19,7 +19,17 @@
       "Bash(chmod:*)",
       "Bash(npm run generate-icons:*)",
       "Bash(ls:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "WebFetch(domain:docs.github.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh api *)",
+      "Bash(gh auth *)",
+      "Bash(awk -F: '$2 >= 775 && $2 <= 985')",
+      "WebFetch(domain:github.blog)",
+      "WebSearch",
+      "mcp__plugin_everything-claude-code_exa__web_fetch_exa",
+      "WebFetch(domain:marketplace.visualstudio.com)"
     ]
   }
 }

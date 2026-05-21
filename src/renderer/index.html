@@ -20,16 +20,17 @@
                     <span>Agent Usage</span>
                 </div>
                 <div class="controls">
-                    <button class="control-btn settings-btn" id="settingsBtn" title="Settings">⚙️</button>
-                    <button class="control-btn refresh-btn" id="refreshBtn" title="Refresh">
+                    <button type="button" class="control-btn settings-btn" id="settingsBtn" title="Settings">⚙️</button>
+                    <button type="button" class="control-btn refresh-btn" id="refreshBtn" title="Refresh">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
+                            <title>Refresh</title>
                             <path d="M23 4v6h-6M1 20v-6h6" />
                             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                         </svg>
                     </button>
-                    <button class="control-btn minimize-btn" id="minimizeBtn" title="Hide Widget">−</button>
-                    <button class="control-btn close-btn" id="closeBtn" title="Close">×</button>
+                    <button type="button" class="control-btn minimize-btn" id="minimizeBtn" title="Hide Widget">−</button>
+                    <button type="button" class="control-btn close-btn" id="closeBtn" title="Close">×</button>
                 </div>
             </div>
 
@@ -45,6 +46,7 @@
                     <div class="login-step1" id="loginStep1">
                         <div class="step-icon">
                             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <title>Log in</title>
                                 <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
                                 <polyline points="10 17 15 12 10 7" />
                                 <line x1="15" y1="12" x2="3" y2="12" />
@@ -56,8 +58,8 @@
                             <p class="step-hint">If auto-login doesn't work, use Manual to paste your session key — Claude.ai may block embedded browsers.</p>
                             <p class="step-error" id="autoDetectError"></p>
                         </div>
-                        <button class="auto-detect-btn" id="autoDetectBtn">Log in</button>
-                        <button class="next-step-btn" id="nextStepBtn">Manual →</button>
+                        <button type="button" class="auto-detect-btn" id="autoDetectBtn">Log in</button>
+                        <button type="button" class="next-step-btn" id="nextStepBtn">Manual →</button>
                     </div>
 
                     <div class="login-step2" id="loginStep2" style="display: none;">
@@ -71,11 +73,11 @@
                             </div>
                             <div class="session-key-input-row">
                                 <input type="password" id="sessionKeyInput" placeholder="sk-ant-sid01-..." spellcheck="false" autocomplete="off">
-                                <button class="connect-btn" id="connectBtn">Connect</button>
+                                <button type="button" class="connect-btn" id="connectBtn">Connect</button>
                             </div>
                             <div class="session-key-footer">
                                 <p class="session-key-error" id="sessionKeyError"></p>
-                                <button class="back-step-btn" id="backStepBtn">← Back</button>
+                                <button type="button" class="back-step-btn" id="backStepBtn">← Back</button>
                             </div>
                         </div>
                     </div>
@@ -86,6 +88,7 @@
             <div class="no-usage-container" id="noUsageContainer" style="display: none;">
                 <div class="no-usage-content">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <title>No usage</title>
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                     </svg>
                     <div class="no-usage-text-group">
@@ -111,6 +114,7 @@
                     <div class="timer-container">
                         <div class="timer-text" id="sessionTimeText">--:--</div>
                         <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
+                            <title>Session timer progress</title>
                             <circle class="timer-bg" cx="12" cy="12" r="10" />
                             <circle class="timer-progress" id="sessionTimer" cx="12" cy="12" r="10"
                                 style="stroke-dasharray: 63; stroke-dashoffset: 63" />
@@ -131,6 +135,7 @@
                     <div class="timer-container">
                         <div class="timer-text" id="weeklyTimeText">--:--</div>
                         <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
+                            <title>Weekly timer progress</title>
                             <circle class="timer-bg" cx="12" cy="12" r="10" />
                             <circle class="timer-progress weekly" id="weeklyTimer" cx="12" cy="12" r="10"
                                 style="stroke-dasharray: 63; stroke-dashoffset: 63" />
@@ -151,6 +156,7 @@
                     <div class="timer-container">
                         <div class="timer-text" id="sonnetTimeText">--:--</div>
                         <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
+                            <title>Sonnet timer progress</title>
                             <circle class="timer-bg" cx="12" cy="12" r="10" />
                             <circle class="timer-progress weekly" id="sonnetTimer" cx="12" cy="12" r="10"
                                 style="stroke-dasharray: 63; stroke-dashoffset: 63" />
@@ -162,14 +168,16 @@
                 <div class="status-bar" id="statusBar">
                     <span class="status-text" id="statusText">Refreshed just now</span>
                     <div class="status-actions">
-                        <button class="extra-toggle-btn" id="extraUsageToggleBtn" title="Toggle extra usage">£</button>
-                        <button class="graph-toggle-btn" id="graphToggleBtn" title="Toggle usage graph">
+                        <button type="button" class="extra-toggle-btn" id="extraUsageToggleBtn" title="Toggle extra usage">£</button>
+                        <button type="button" class="graph-toggle-btn" id="graphToggleBtn" title="Toggle usage graph">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <title>Toggle usage graph</title>
                                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                             </svg>
                         </button>
-                        <button class="pie-toggle-btn" id="pieToggleBtn" title="Toggle model breakdown">
+                        <button type="button" class="pie-toggle-btn" id="pieToggleBtn" title="Toggle model breakdown">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <title>Toggle model breakdown</title>
                                 <path d="M12 2a10 10 0 0 1 10 10H12V2z" />
                                 <path d="M12 12L4.93 19.07A10 10 0 0 1 12 2v10z" />
                                 <circle cx="12" cy="12" r="10" />
@@ -206,17 +214,17 @@
                     <div class="codex-login-row">
                         <span class="codex-login-text">Connect OpenAI Codex</span>
                         <p class="codex-login-error" id="codexLoginError"></p>
-                        <button class="codex-connect-btn" id="codexAutoDetectBtn">Connect</button>
-                        <button class="codex-manual-btn" id="codexManualBtn">Manual →</button>
+                        <button type="button" class="codex-connect-btn" id="codexAutoDetectBtn">Connect</button>
+                        <button type="button" class="codex-manual-btn" id="codexManualBtn">Manual →</button>
                     </div>
                     <div id="codexManualInput" style="display: none;">
                         <div class="codex-token-row">
                             <input type="password" id="codexTokenInput" placeholder="Bearer or session token..." spellcheck="false" autocomplete="off">
-                            <button class="codex-save-btn" id="codexSaveBtn">Save</button>
+                            <button type="button" class="codex-save-btn" id="codexSaveBtn">Save</button>
                         </div>
                         <div class="codex-token-footer">
                             <p class="codex-token-error" id="codexTokenError"></p>
-                            <button class="back-step-btn" id="codexBackBtn">← Back</button>
+                            <button type="button" class="back-step-btn" id="codexBackBtn">← Back</button>
                         </div>
                     </div>
                 </div>
@@ -237,6 +245,7 @@
                         <div class="timer-container">
                             <div class="timer-text" id="codexSessionTimeText">--:--</div>
                             <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
+                                <title>Session timer progress</title>
                                 <circle class="timer-bg" cx="12" cy="12" r="10" />
                                 <circle class="timer-progress codex" id="codexSessionTimer" cx="12" cy="12" r="10"
                                     style="stroke-dasharray: 63; stroke-dashoffset: 63" />
@@ -256,6 +265,7 @@
                         <div class="timer-container">
                             <div class="timer-text" id="codexWeeklyTimeText">--:--</div>
                             <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
+                                <title>Weekly timer progress</title>
                                 <circle class="timer-bg" cx="12" cy="12" r="10" />
                                 <circle class="timer-progress codex-weekly" id="codexWeeklyTimer" cx="12" cy="12" r="10"
                                     style="stroke-dasharray: 63; stroke-dashoffset: 63" />
@@ -269,13 +279,15 @@
                     <div class="status-bar codex-status-bar">
                         <span class="status-text" id="codexStatusText">Refreshed just now</span>
                         <div class="status-actions">
-                            <button class="graph-toggle-btn codex-graph-toggle-btn" id="codexGraphToggleBtn" title="Toggle codex usage graph">
+                            <button type="button" class="graph-toggle-btn codex-graph-toggle-btn" id="codexGraphToggleBtn" title="Toggle codex usage graph">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <title>Toggle codex usage graph</title>
                                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                                 </svg>
                             </button>
-                            <button class="pie-toggle-btn codex-pie-toggle-btn" id="codexPieToggleBtn" title="Toggle codex breakdown">
+                            <button type="button" class="pie-toggle-btn codex-pie-toggle-btn" id="codexPieToggleBtn" title="Toggle codex breakdown">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <title>Toggle codex breakdown</title>
                                     <path d="M12 2a10 10 0 0 1 10 10H12V2z" />
                                     <path d="M12 12L4.93 19.07A10 10 0 0 1 12 2v10z" />
                                     <circle cx="12" cy="12" r="10" />
@@ -295,12 +307,130 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Copilot Section disabled until its auth/usage integration is reliable. -->
+            <div id="copilotSection" style="display: none;">
+                <!-- Copilot Login -->
+                <div id="copilotLoginContainer">
+                    <div class="service-divider copilot-divider">
+                        <span class="service-divider-label">Copilot</span>
+                        <span class="service-divider-subtitle">GitHub Premium Requests</span>
+                    </div>
+                    <!-- Step 1: prompt -->
+                    <div id="copilotLoginPrompt" class="codex-login-row">
+                        <span class="codex-login-text">Connect GitHub Copilot</span>
+                        <p class="codex-login-error" id="copilotLoginError"></p>
+                        <button type="button" class="codex-manual-btn" id="copilotConnectBtn">Connect with GitHub →</button>
+                    </div>
+                    <!-- Step 2: enter OAuth App client ID (one-time setup) -->
+                    <div id="copilotClientIdSetup" style="display: none;">
+                        <p class="copilot-device-instruction">Create a GitHub OAuth App with <strong>Device Flow</strong> enabled at github.com/settings/developers, then enter the Client ID:</p>
+                        <div class="codex-token-row">
+                            <input type="text" id="copilotClientIdInput" placeholder="GitHub OAuth App Client ID..." spellcheck="false" autocomplete="off">
+                            <button type="button" class="codex-save-btn" id="copilotClientIdSaveBtn">Save</button>
+                        </div>
+                        <div class="codex-token-footer">
+                            <p class="codex-token-error" id="copilotClientIdError"></p>
+                            <button type="button" class="back-step-btn" id="copilotClientIdBackBtn">← Back</button>
+                        </div>
+                    </div>
+                    <!-- Step 3: device flow — show user code -->
+                    <div id="copilotDeviceFlow" style="display: none;">
+                        <p class="copilot-device-instruction">Visit <strong>github.com/login/device</strong> and enter:</p>
+                        <div class="copilot-user-code" id="copilotUserCode">XXXX-XXXX</div>
+                        <div class="copilot-device-actions">
+                            <button type="button" class="codex-save-btn" id="copilotOpenGithubBtn">Open GitHub →</button>
+                            <button type="button" class="back-step-btn" id="copilotCancelFlowBtn">Cancel</button>
+                        </div>
+                        <p class="copilot-waiting-text" id="copilotWaitingText">Waiting for authorization...</p>
+                    </div>
+                </div>
+
+                <!-- Copilot Usage Content -->
+                <div id="copilotContent" style="display: none;">
+                    <div class="service-divider copilot-divider">
+                        <span class="service-divider-label">Copilot</span>
+                        <span class="service-divider-subtitle" id="copilotPlanSubtitle">GitHub Premium Requests</span>
+                    </div>
+                    <!-- Premium Requests -->
+                    <div class="usage-section">
+                        <span class="usage-label">Premium Reqs</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill copilot" id="copilotPremiumProgress" style="width: 0%"></div>
+                        </div>
+                        <span class="usage-percentage" id="copilotPremiumPercentage">0%</span>
+                        <div class="timer-container">
+                            <div class="copilot-count-text" id="copilotCountText">--</div>
+                        </div>
+                    </div>
+
+                    <div class="copilot-status-bar">
+                        <span class="status-text" id="copilotStatusText">Refreshed just now</span>
+                        <span class="copilot-reset-text" id="copilotResetText"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gemini Section -->
+            <div id="geminiSection">
+                <!-- Gemini Login -->
+                <div id="geminiLoginContainer">
+                    <div class="service-divider gemini-divider">
+                        <span class="service-divider-label">Gemini</span>
+                        <span class="service-divider-subtitle">Google AI Studio</span>
+                    </div>
+                    <div class="codex-login-row">
+                        <span class="codex-login-text">Connect Gemini API</span>
+                    </div>
+                    <div id="geminiApiKeySetup">
+                        <div class="codex-token-row">
+                            <input type="password" id="geminiApiKeyInput" placeholder="Google AI Studio API Key..." spellcheck="false" autocomplete="off">
+                            <button type="button" class="codex-save-btn" id="geminiSaveBtn">Save</button>
+                        </div>
+                        <div class="codex-token-footer">
+                            <p class="codex-token-error" id="geminiLoginError"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gemini Usage Content -->
+                <div id="geminiContent" style="display: none;">
+                    <div class="service-divider gemini-divider">
+                        <span class="service-divider-label">Gemini</span>
+                        <span class="service-divider-subtitle">API Usage</span>
+                    </div>
+                    <!-- Daily Limit -->
+                    <div class="usage-section">
+                        <span class="usage-label">Daily Quota</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill gemini" id="geminiDailyProgress" style="width: 0%"></div>
+                        </div>
+                        <span class="usage-percentage" id="geminiDailyPercentage">0%</span>
+                        <div class="timer-container">
+                            <div class="timer-text" id="geminiDailyTimeText">--:--</div>
+                            <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
+                                <title>Daily timer progress</title>
+                                <circle class="timer-bg" cx="12" cy="12" r="10" />
+                                <circle class="timer-progress gemini" id="geminiDailyTimer" cx="12" cy="12" r="10"
+                                    style="stroke-dasharray: 63; stroke-dashoffset: 63" />
+                                <circle class="usage-ring-bg" cx="12" cy="12" r="6" />
+                                <circle class="usage-ring gemini" id="geminiDailyUsageRing" cx="12" cy="12" r="6"
+                                    style="stroke-dasharray: 37.7; stroke-dashoffset: 37.7" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="status-bar gemini-status-bar">
+                        <span class="status-text" id="geminiStatusText">Refreshed just now</span>
+                    </div>
+                </div>
+            </div>
             </div>
 
             <!-- Settings Overlay -->
             <div class="settings-overlay" id="settingsOverlay" style="display: none;">
                 <div class="settings-content" id="settingsContent">
-                    <button class="icon-close-settings-btn" id="closeSettingsBtn" title="Close">×</button>
+                    <button type="button" class="icon-close-settings-btn" id="closeSettingsBtn" title="Close">×</button>
                     <p class="disclaimer">
                         <strong>Disclaimer:</strong> Unofficial tool not affiliated with Anthropic. Use at your own
                         discretion.
@@ -361,21 +491,22 @@
                     </div>
 
                     <div class="settings-actions">
-                        <button class="coffee-btn" id="coffeeBtn">
+                        <button type="button" class="coffee-btn" id="coffeeBtn">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <title>Buy me a coffee</title>
                                 <path d="M17 8h1a4 4 0 1 1 0 8h-1" />
                                 <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
                                 <line x1="6" y1="2" x2="6" y2="4" />
                                 <line x1="10" y1="2" x2="10" y2="4" />
                                 <line x1="14" y1="2" x2="14" y2="4" />
                             </svg>
-                            Buy the author a coffee!
+                            Buy me a coffee!
                         </button>
-
-                        <button class="coffee-btn" id="coffeeBtnAlt">
+                        <button type="button" class="coffee-btn" id="coffeeBtnAlt">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <title>Buy James a coffee</title>
                                 <path d="M17 8h1a4 4 0 1 1 0 8h-1" />
                                 <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
                                 <line x1="6" y1="2" x2="6" y2="4" />
@@ -387,8 +518,8 @@
                     </div>
 
                     <div class="settings-actions">
-                        <button class="clear-history-btn" id="clearHistoryBtn">Clear History</button>
-                        <button class="logout-btn" id="logoutBtn">Log Out</button>
+                        <button type="button" class="clear-history-btn" id="clearHistoryBtn">Clear History</button>
+                        <button type="button" class="logout-btn" id="logoutBtn">Log Out</button>
                     </div>
                 </div>
             </div>

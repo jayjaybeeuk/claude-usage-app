@@ -38,6 +38,7 @@ export interface TrayUsageStats {
   sonnet: number
   codexSession?: number
   codexWeekly?: number
+  geminiDaily?: number
 }
 
 export interface UsageHistoryEntry {
@@ -50,6 +51,7 @@ export interface UsageHistoryEntry {
   oauthApps?: number
   codexSession?: number
   codexWeekly?: number
+  geminiDaily?: number
 }
 
 export interface UsageTimePeriod {
@@ -107,6 +109,45 @@ export interface CachedCodexUsageData {
   timestamp: number
 }
 
+export interface CopilotCredentials {
+  accessToken: string | null
+}
+
+export interface CopilotUsageData {
+  totalConsumed?: number
+  entitlement?: number
+  copilot_plan?: string
+  billingYear?: number
+  billingMonth?: number
+}
+
+export interface CachedCopilotUsageData {
+  data: CopilotUsageData
+  timestamp: number
+}
+
+export interface CopilotDeviceFlowResult {
+  user_code: string
+  verification_uri: string
+}
+
+export interface GeminiCredentials {
+  apiKey: string | null
+}
+
+export interface SaveGeminiCredentialsPayload {
+  apiKey: string
+}
+
+export interface GeminiUsageData {
+  daily?: UsageTimePeriod
+}
+
+export interface CachedGeminiUsageData {
+  data: GeminiUsageData
+  timestamp: number
+}
+
 export interface ElectronAPI {
   getCredentials: () => Promise<Credentials>
   saveCredentials: (credentials: SaveCredentialsPayload) => Promise<boolean>
@@ -149,4 +190,20 @@ export interface ElectronAPI {
   fetchCodexUsageData: () => Promise<CodexUsageData>
   getCachedCodexUsage: () => Promise<CachedCodexUsageData | null>
   onCodexSessionExpired: (callback: () => void) => void
+  // Copilot
+  getCopilotCredentials: () => Promise<CopilotCredentials>
+  fetchCopilotUsageData: () => Promise<CopilotUsageData>
+  getCachedCopilotUsage: () => Promise<CachedCopilotUsageData | null>
+  copilotGetClientId: () => Promise<string | null>
+  copilotSetClientId: (clientId: string) => Promise<void>
+  copilotStartDeviceFlow: () => Promise<CopilotDeviceFlowResult>
+  onCopilotAuthSuccess: (callback: () => void) => void
+  onCopilotAuthFailed: (callback: (error: string) => void) => void
+  onCopilotSessionExpired: (callback: () => void) => void
+  // Gemini
+  getGeminiCredentials: () => Promise<GeminiCredentials>
+  saveGeminiCredentials: (credentials: SaveGeminiCredentialsPayload) => Promise<boolean>
+  deleteGeminiCredentials: () => Promise<boolean>
+  fetchGeminiUsageData: () => Promise<GeminiUsageData>
+  getCachedGeminiUsage: () => Promise<CachedGeminiUsageData | null>
 }

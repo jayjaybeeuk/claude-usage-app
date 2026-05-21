@@ -51,6 +51,7 @@ const api = {
     oauthApps?: number
     codexSession?: number
     codexWeekly?: number
+    geminiDaily?: number
   }) =>
     ipcRenderer.invoke('save-usage-history-entry', entry),
   clearUsageHistory: () => ipcRenderer.invoke('clear-usage-history'),
@@ -74,6 +75,23 @@ const api = {
   getPlatform: () => ipcRenderer.invoke('get-platform'),
   platform: process.platform,
 
+  // Copilot
+  getCopilotCredentials: () => ipcRenderer.invoke('get-copilot-credentials'),
+  fetchCopilotUsageData: () => ipcRenderer.invoke('fetch-copilot-usage'),
+  getCachedCopilotUsage: () => ipcRenderer.invoke('get-cached-copilot-usage'),
+  copilotGetClientId: () => ipcRenderer.invoke('copilot-get-client-id'),
+  copilotSetClientId: (clientId: string) => ipcRenderer.invoke('copilot-set-client-id', clientId),
+  copilotStartDeviceFlow: () => ipcRenderer.invoke('copilot-start-device-flow'),
+  onCopilotAuthSuccess: (callback: () => void) => {
+    ipcRenderer.on('copilot-auth-success', () => callback())
+  },
+  onCopilotAuthFailed: (callback: (error: string) => void) => {
+    ipcRenderer.on('copilot-auth-failed', (_event, error) => callback(error))
+  },
+  onCopilotSessionExpired: (callback: () => void) => {
+    ipcRenderer.on('copilot-session-expired', () => callback())
+  },
+
   // Codex
   getCodexCredentials: () => ipcRenderer.invoke('get-codex-credentials'),
   saveCodexCredentials: (credentials: { accessToken: string; cookieName?: string }) =>
@@ -85,6 +103,14 @@ const api = {
   onCodexSessionExpired: (callback: () => void) => {
     ipcRenderer.on('codex-session-expired', () => callback())
   },
+
+  // Gemini
+  getGeminiCredentials: () => ipcRenderer.invoke('get-gemini-credentials'),
+  saveGeminiCredentials: (credentials: { apiKey: string }) =>
+    ipcRenderer.invoke('save-gemini-credentials', credentials),
+  deleteGeminiCredentials: () => ipcRenderer.invoke('delete-gemini-credentials'),
+  fetchGeminiUsageData: () => ipcRenderer.invoke('fetch-gemini-usage'),
+  getCachedGeminiUsage: () => ipcRenderer.invoke('get-cached-gemini-usage'),
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

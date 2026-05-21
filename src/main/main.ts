@@ -7,6 +7,7 @@ import {
   session,
   shell,
   nativeImage,
+  safeStorage,
   MenuItemConstructorOptions,
 } from 'electron'
 import path from 'path'
@@ -28,6 +29,12 @@ import type {
   CachedUsageData,
   CodexUsageData,
   CachedCodexUsageData,
+  CopilotCredentials,
+  CopilotDeviceFlowResult,
+  CopilotUsageData,
+  CachedCopilotUsageData,
+  GeminiUsageData,
+  CachedGeminiUsageData,
 } from '../shared/ipc-types'
 
 // Resolve project root from compiled output location (dist-main/main/main.js)
@@ -48,7 +55,14 @@ interface StoreSchema {
   codexCookieName: string             // Name of the captured auth cookie
   cachedCodexUsageData: CodexUsageData
   cachedCodexUsageTimestamp: number
+  copilotClientId: string             // GitHub OAuth App client_id (not a secret)
+  copilotAccessToken: string          // GitHub OAuth token encrypted via safeStorage
+  cachedCopilotUsageData: CopilotUsageData
+  cachedCopilotUsageTimestamp: number
   autoStartEnabled: boolean           // Whether app should start with system
+  geminiApiKey: string
+  cachedGeminiUsageData: GeminiUsageData
+  cachedGeminiUsageTimestamp: number
 }
 
 const store = new Store<StoreSchema>({
@@ -252,6 +266,15 @@ function buildTrayMenu(): Electron.Menu {
         })
       }
     }
+    // Gemini stats
+    if (latestTrayStats.geminiDaily !== undefined) {
+      items.push({ type: 'separator' })
+      items.push({ label: 'Gemini', enabled: false })
+      items.push({
+        label: `  Daily:    ${Math.round(latestTrayStats.geminiDaily)}%`,
+        enabled: false,
+      })
+    }
     items.push({ type: 'separator' })
   }
 
@@ -324,7 +347,11 @@ function updateTrayDisplay(): void {
       latestTrayStats.codexSession !== undefined
         ? ` ✦${Math.round(latestTrayStats.codexSession)}%`
         : ''
-    tray.setTitle(hasCodex ? `${claudePct}${codexPct}` : claudePct, { fontType: 'monospacedDigit' })
+    const hasGemini = latestTrayStats.geminiDaily !== undefined
+    const geminiPct = latestTrayStats.geminiDaily !== undefined
+        ? ` ✧${Math.round(latestTrayStats.geminiDaily)}%`
+        : ''
+    tray.setTitle(hasCodex || hasGemini ? `${claudePct}${codexPct}${geminiPct}` : claudePct, { fontType: 'monospacedDigit' })
   } else if (isMac) {
     tray.setTitle('')
   }
@@ -336,8 +363,12 @@ function updateTrayDisplay(): void {
       latestTrayStats.codexSession !== undefined
         ? ` | Codex Session: ${Math.round(latestTrayStats.codexSession)}%`
         : ''
+    const geminiInfo =
+      latestTrayStats.geminiDaily !== undefined
+        ? ` | Gemini Daily: ${Math.round(latestTrayStats.geminiDaily)}%`
+        : ''
     tray.setToolTip(
-      `Agent Usage — Claude Session: ${Math.round(latestTrayStats.session)}% | Weekly: ${Math.round(latestTrayStats.weekly)}%${codexInfo}`,
+      `Agent Usage — Claude Session: ${Math.round(latestTrayStats.session)}% | Weekly: ${Math.round(latestTrayStats.weekly)}%${codexInfo}${geminiInfo}`,
     )
   } else {
     tray.setToolTip('Agent Usage')
@@ -900,6 +931,20 @@ function normalizeBearerToken(token: string): string {
   return token.replace(/^Bearer\s+/i, '').trim()
 }
 
+function encryptSecret(plaintext: string): string | null {
+  if (!safeStorage.isEncryptionAvailable()) return null
+  return safeStorage.encryptString(plaintext).toString('base64')
+}
+
+function decryptSecret(base64: string): string | null {
+  if (!safeStorage.isEncryptionAvailable()) return null
+  try {
+    return safeStorage.decryptString(Buffer.from(base64, 'base64'))
+  } catch {
+    return null
+  }
+}
+
 function isCodexCookieDomain(domain?: string): boolean {
   if (!domain) return false
   const normalized = domain.replace(/^\./, '').toLowerCase()
@@ -1180,6 +1225,257 @@ ipcMain.handle(IpcChannels.FETCH_CODEX_USAGE, async () => {
 ipcMain.handle(IpcChannels.GET_CACHED_CODEX_USAGE, (): CachedCodexUsageData | null => {
   const data = store.get('cachedCodexUsageData') as CodexUsageData | undefined
   const timestamp = store.get('cachedCodexUsageTimestamp') as number | undefined
+  if (!data || !timestamp) return null
+  return { data, timestamp }
+})
+
+// ─── Copilot IPC Handlers ────────────────────────────────────────────────────
+
+const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code'
+const GITHUB_OAUTH_TOKEN_URL = 'https://github.com/login/oauth/access_token'
+const COPILOT_INTERNAL_TOKEN_URL = 'https://api.github.com/copilot_internal/v2/token'
+
+function parseCopilotTokenResponse(tokenData: Record<string, unknown>): CopilotUsageData {
+  const premiumRequests =
+    tokenData.premium_requests && typeof tokenData.premium_requests === 'object'
+      ? (tokenData.premium_requests as Record<string, unknown>)
+      : {}
+  const entitlement = Number(premiumRequests.quota ?? 0)
+  const totalConsumed = Number(premiumRequests.used ?? 0)
+  const now = new Date()
+
+  return {
+    copilot_plan: (tokenData.copilot_plan as string | undefined) ?? (tokenData.sku as string | undefined) ?? '',
+    totalConsumed: Number.isFinite(totalConsumed) ? totalConsumed : 0,
+    entitlement: Number.isFinite(entitlement) ? entitlement : 0,
+    billingYear: now.getFullYear(),
+    billingMonth: now.getMonth() + 1,
+  }
+}
+
+function clearCopilotCredentials(): void {
+  store.delete('copilotAccessToken' as keyof StoreSchema)
+  store.delete('cachedCopilotUsageData' as keyof StoreSchema)
+  store.delete('cachedCopilotUsageTimestamp' as keyof StoreSchema)
+  mainWindow?.webContents.send(IpcChannels.COPILOT_SESSION_EXPIRED)
+}
+
+function startCopilotDeviceFlowPoll(deviceCode: string, intervalSecs: number, expiresIn: number): void {
+  const expiresAt = Date.now() + expiresIn * 1000
+  let currentInterval = intervalSecs
+  const clientId = (store.get('copilotClientId') as string | undefined) ?? ''
+
+  const poll = async (): Promise<void> => {
+    if (Date.now() >= expiresAt) {
+      mainWindow?.webContents.send(IpcChannels.COPILOT_AUTH_FAILED, 'Authorization code expired. Please try again.')
+      return
+    }
+
+    try {
+      const response = await session.defaultSession.fetch(GITHUB_OAUTH_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': USER_AGENT,
+        },
+        body: JSON.stringify({
+          client_id: clientId,
+          device_code: deviceCode,
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        }),
+      })
+      const data = (await response.json()) as Record<string, unknown>
+
+      if (typeof data.access_token === 'string' && data.access_token) {
+        const encrypted = encryptSecret(data.access_token)
+        if (!encrypted) {
+          mainWindow?.webContents.send(IpcChannels.COPILOT_AUTH_FAILED, 'Failed to encrypt token')
+          return
+        }
+        store.set('copilotAccessToken', encrypted)
+        mainWindow?.webContents.send(IpcChannels.COPILOT_AUTH_SUCCESS)
+        return
+      }
+
+      if (data.error === 'slow_down') {
+        currentInterval = Number(data.interval ?? currentInterval) + 5
+      } else if (data.error === 'access_denied' || data.error === 'expired_token') {
+        mainWindow?.webContents.send(
+          IpcChannels.COPILOT_AUTH_FAILED,
+          (data.error_description as string | undefined) ?? String(data.error),
+        )
+        return
+      }
+    } catch {
+      // Keep polling through transient network failures.
+    }
+
+    setTimeout(() => { void poll() }, currentInterval * 1000)
+  }
+
+  setTimeout(() => { void poll() }, currentInterval * 1000)
+}
+
+ipcMain.handle(IpcChannels.GET_COPILOT_CREDENTIALS, (): CopilotCredentials => {
+  const stored = (store.get('copilotAccessToken') as string | undefined) ?? null
+  return { accessToken: stored ? decryptSecret(stored) : null }
+})
+
+ipcMain.handle(IpcChannels.COPILOT_GET_CLIENT_ID, (): string | null => {
+  return (store.get('copilotClientId') as string | undefined) ?? null
+})
+
+ipcMain.handle(IpcChannels.COPILOT_SET_CLIENT_ID, (_event: Electron.IpcMainInvokeEvent, clientId: string) => {
+  store.set('copilotClientId', clientId.trim())
+})
+
+ipcMain.handle(IpcChannels.COPILOT_START_DEVICE_FLOW, async (): Promise<CopilotDeviceFlowResult> => {
+  const clientId = (store.get('copilotClientId') as string | undefined) ?? ''
+  if (!clientId) {
+    throw new Error('No GitHub OAuth Client ID configured')
+  }
+
+  const response = await session.defaultSession.fetch(GITHUB_DEVICE_CODE_URL, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'User-Agent': USER_AGENT,
+    },
+    body: JSON.stringify({ client_id: clientId, scope: 'copilot' }),
+  })
+  if (!response.ok) {
+    throw new Error(`DeviceFlowInitFailed:${response.status}`)
+  }
+
+  const data = (await response.json()) as {
+    device_code: string
+    user_code: string
+    verification_uri: string
+    expires_in: number
+    interval: number
+  }
+  startCopilotDeviceFlowPoll(data.device_code, data.interval, data.expires_in)
+
+  return {
+    user_code: data.user_code,
+    verification_uri: data.verification_uri,
+  }
+})
+
+ipcMain.handle(IpcChannels.FETCH_COPILOT_USAGE, async (): Promise<CopilotUsageData> => {
+  const stored = store.get('copilotAccessToken') as string | undefined
+  if (!stored) throw new Error('Missing Copilot credentials')
+
+  const oauthToken = decryptSecret(stored)
+  if (!oauthToken) throw new Error('CopilotCredentialDecryptFailed')
+
+  const response = await session.defaultSession.fetch(COPILOT_INTERNAL_TOKEN_URL, {
+    headers: {
+      Authorization: `Bearer ${oauthToken}`,
+      'User-Agent': USER_AGENT,
+      Accept: 'application/json',
+    },
+  })
+  debugLog(`Copilot internal token fetch => ${response.status}`)
+
+  if (response.status === 401 || response.status === 403 || response.status === 404) {
+    clearCopilotCredentials()
+    throw new Error('CopilotSessionExpired')
+  }
+  if (!response.ok) {
+    throw new Error(`CopilotTokenFetchFailed:${response.status}`)
+  }
+
+  const tokenData = (await response.json()) as Record<string, unknown>
+  debugLogToRenderer('Raw Copilot internal token response:', tokenData)
+
+  const data = parseCopilotTokenResponse(tokenData)
+  store.set('cachedCopilotUsageData', data)
+  store.set('cachedCopilotUsageTimestamp', Date.now())
+  return data
+})
+
+ipcMain.handle(IpcChannels.GET_CACHED_COPILOT_USAGE, (): CachedCopilotUsageData | null => {
+  const data = store.get('cachedCopilotUsageData') as CopilotUsageData | undefined
+  const timestamp = store.get('cachedCopilotUsageTimestamp') as number | undefined
+  if (!data || !timestamp) return null
+  return { data, timestamp }
+})
+
+// ─── Gemini IPC Handlers ─────────────────────────────────────────────────────
+
+ipcMain.handle(IpcChannels.GET_GEMINI_CREDENTIALS, () => {
+  return {
+    apiKey: store.get('geminiApiKey') ?? null,
+  }
+})
+
+ipcMain.handle(IpcChannels.SAVE_GEMINI_CREDENTIALS, (_event: Electron.IpcMainInvokeEvent, payload: { apiKey: string }) => {
+  const apiKey = payload.apiKey?.trim()
+  if (!apiKey) throw new Error('Missing Gemini API Key')
+  store.set('geminiApiKey', apiKey)
+  return true
+})
+
+ipcMain.handle(IpcChannels.DELETE_GEMINI_CREDENTIALS, () => {
+  store.delete('geminiApiKey' as keyof StoreSchema)
+  store.delete('cachedGeminiUsageData' as keyof StoreSchema)
+  store.delete('cachedGeminiUsageTimestamp' as keyof StoreSchema)
+  return true
+})
+
+ipcMain.handle(IpcChannels.FETCH_GEMINI_USAGE, async () => {
+  const apiKey = store.get('geminiApiKey') as string | undefined
+  if (!apiKey) throw new Error('Missing Gemini credentials')
+
+  try {
+    // Google AI Studio currently does NOT expose a public API endpoint for
+    // checking usage quotas or remaining daily limits via an API key.
+    // To ensure the key is valid and working, we make a lightweight request
+    // to the /models endpoint. If this succeeds, the key is valid.
+    const response = await session.defaultSession.fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+      {
+        headers: { 'User-Agent': USER_AGENT },
+      }
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      debugLog('Gemini API validation failed:', response.status, errorText)
+
+      if (response.status === 400 || response.status === 403) {
+        store.delete('geminiApiKey' as keyof StoreSchema)
+        throw new Error('Invalid or disabled Gemini API Key')
+      }
+      throw new Error(`Gemini API Error: ${response.statusText}`)
+    }
+
+    // Since real usage data isn't provided by the API, we return a structural
+    // placeholder. When Google adds a /usage endpoint, replace this block with
+    // the real fetch and parse logic.
+    const data: GeminiUsageData = {
+      daily: {
+        utilization: 0,
+        resets_at: null, // Resets at midnight PT, left null since we lack real data
+      },
+    }
+
+    store.set('cachedGeminiUsageData', data)
+    store.set('cachedGeminiUsageTimestamp', Date.now())
+    return data
+  } catch (error) {
+    const err = error as Error
+    console.error('Gemini API fetch failed:', err.message)
+    throw err
+  }
+})
+
+ipcMain.handle(IpcChannels.GET_CACHED_GEMINI_USAGE, (): CachedGeminiUsageData | null => {
+  const data = store.get('cachedGeminiUsageData') as GeminiUsageData | undefined
+  const timestamp = store.get('cachedGeminiUsageTimestamp') as number | undefined
   if (!data || !timestamp) return null
   return { data, timestamp }
 })

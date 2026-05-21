@@ -31,6 +31,21 @@ export const IpcChannels = {
   FETCH_CODEX_USAGE: 'fetch-codex-usage',
   GET_CACHED_CODEX_USAGE: 'get-cached-codex-usage',
 
+  // Copilot invoke channels
+  GET_COPILOT_CREDENTIALS: 'get-copilot-credentials',
+  FETCH_COPILOT_USAGE: 'fetch-copilot-usage',
+  GET_CACHED_COPILOT_USAGE: 'get-cached-copilot-usage',
+  COPILOT_GET_CLIENT_ID: 'copilot-get-client-id',
+  COPILOT_SET_CLIENT_ID: 'copilot-set-client-id',
+  COPILOT_START_DEVICE_FLOW: 'copilot-start-device-flow',
+
+  // Gemini invoke channels
+  GET_GEMINI_CREDENTIALS: 'get-gemini-credentials',
+  SAVE_GEMINI_CREDENTIALS: 'save-gemini-credentials',
+  DELETE_GEMINI_CREDENTIALS: 'delete-gemini-credentials',
+  FETCH_GEMINI_USAGE: 'fetch-gemini-usage',
+  GET_CACHED_GEMINI_USAGE: 'get-cached-gemini-usage',
+
   // Auto-start settings
   GET_AUTO_START: 'get-auto-start',
   SET_AUTO_START: 'set-auto-start',
@@ -46,5 +61,8 @@ export const IpcChannels = {
   REFRESH_USAGE: 'refresh-usage',
   SESSION_EXPIRED: 'session-expired',
   CODEX_SESSION_EXPIRED: 'codex-session-expired',
+  COPILOT_AUTH_SUCCESS: 'copilot-auth-success',
+  COPILOT_AUTH_FAILED: 'copilot-auth-failed',
+  COPILOT_SESSION_EXPIRED: 'copilot-session-expired',
   DEBUG_LOG: 'debug-log',
 } as const

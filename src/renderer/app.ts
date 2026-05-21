@@ -1,186 +1,33 @@
 import './styles.css'
 import { DEFAULT_REFRESH_MINUTES, MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES } from '../shared/refresh-interval'
-import type { Credentials, UsageData, UsageTimePeriod, ExtraUsage, UsageHistoryEntry, CodexUsageData } from '../shared/ipc-types'
+import type { UsageHistoryEntry } from '../shared/ipc-types'
+import { elements } from './ui/elements'
+import { loadTheme, loadBackgroundHue, setTheme, setBackgroundHue, onThemeChange } from './ui/theme'
+import { resizeWidget, resizeForSettings, restoreNonSettingsHeight, WIDGET_HEIGHT_COLLAPSED } from './ui/widget'
+import { debugLog } from './ui/utils'
+import { ClaudeProvider } from './providers/ClaudeProvider'
+import { CodexProvider } from './providers/CodexProvider'
+// Copilot frontend is disabled until its auth/usage integration is reliable.
+// import { CopilotProvider } from './providers/CopilotProvider'
+import { GeminiProvider } from './providers/GeminiProvider'
 
 // Application state
-let credentials: Credentials | null = null
 let updateInterval: ReturnType<typeof setInterval> | null = null
-let countdownInterval: ReturnType<typeof setInterval> | null = null
-let latestUsageData: UsageData | null = null
-let isExpanded = false
-let isGraphVisible = false
-let isPieVisible = false
-let lastRefreshTime: number | null = null
-let statusInterval: ReturnType<typeof setInterval> | null = null
 let refreshIntervalMinutes = DEFAULT_REFRESH_MINUTES
 let isSettingsOpen = false
-let isOffline = false
-let offlineRetryInterval: ReturnType<typeof setInterval> | null = null
-const WIDGET_HEIGHT_COLLAPSED = 164 // 140 base + 24 status bar
-const WIDGET_ROW_HEIGHT = 30
-const GRAPH_HEIGHT = 170 // graph section height including padding
-const PIE_HEIGHT = 162 // pie section height including padding — must match .pie-section CSS height
-const SONNET_ROW_HEIGHT = 30 // sonnet row height
-let lastNonSettingsHeight = WIDGET_HEIGHT_COLLAPSED
 
-// Codex state
-let codexHasData = false
-let latestCodexData: CodexUsageData | null = null
-let codexCountdownInterval: ReturnType<typeof setInterval> | null = null
-let isCodexGraphVisible = false
-let isCodexPieVisible = false
-let codexLastRefreshTime: number | null = null
-let codexStatusInterval: ReturnType<typeof setInterval> | null = null
-const CODEX_SECTION_BASE_HEIGHT = 28 + 32 + 32 // divider + 2 usage rows
-const CODEX_LOGIN_HEIGHT = CODEX_SECTION_BASE_HEIGHT + 20
-const CODEX_GRAPH_HEIGHT = 170
-const CODEX_PIE_HEIGHT = 162
-const CODEX_STATUS_HEIGHT = 34
-const WIDGET_HEIGHT_BUFFER = 8
-
-// Debug logging — only shows in DevTools (development mode).
-// Regular users won't see verbose logs in production.
-const DEBUG = new URLSearchParams(window.location.search).has('debug')
-function debugLog(...args: unknown[]): void {
-  if (DEBUG) console.log('[Debug]', ...args)
-}
-
-// Helper to safely get DOM elements with type assertion
-function getElement<T extends Element = HTMLElement>(id: string): T {
-  const el = document.getElementById(id)
-  if (!el) throw new Error(`Element #${id} not found`)
-  return el as unknown as T
-}
-
-// Helper to get CSS custom property values
-function getCSSVariable(propertyName: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(propertyName).trim()
-}
-
-function getThemeColors(): Record<string, string> {
-  return {
-    claudePrimary: getCSSVariable('--claude-primary'),
-    claudeSecondary: getCSSVariable('--claude-secondary'),
-    claudeSecondaryLight: getCSSVariable('--claude-secondary-light'),
-    codexPrimary: getCSSVariable('--codex-primary'),
-    codexSecondary: getCSSVariable('--codex-secondary'),
-    codexSecondaryLight: getCSSVariable('--codex-secondary-light'),
-  }
-}
-
-// Helper to convert hex color to rgba with alpha
-function hexToRgba(hex: string, alpha: number): string {
-  // Remove the hash if it exists
-  hex = hex.replace('#', '')
-  
-  // Parse RGB values
-  const r = parseInt(hex.substr(0, 2), 16)
-  const g = parseInt(hex.substr(2, 2), 16)
-  const b = parseInt(hex.substr(4, 2), 16)
-  
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
-
-// DOM elements
-const elements = {
-  widgetContainer: getElement<HTMLDivElement>('widgetContainer'),
-  titleBar: getElement<HTMLDivElement>('titleBar'),
-  loadingContainer: getElement<HTMLDivElement>('loadingContainer'),
-  loginContainer: getElement<HTMLDivElement>('loginContainer'),
-  noUsageContainer: getElement<HTMLDivElement>('noUsageContainer'),
-  mainContent: getElement<HTMLDivElement>('mainContent'),
-  loginStep1: getElement<HTMLDivElement>('loginStep1'),
-  loginStep2: getElement<HTMLDivElement>('loginStep2'),
-  autoDetectBtn: getElement<HTMLButtonElement>('autoDetectBtn'),
-  autoDetectError: getElement<HTMLParagraphElement>('autoDetectError'),
-  openBrowserLink: getElement<HTMLAnchorElement>('openBrowserLink'),
-  nextStepBtn: getElement<HTMLButtonElement>('nextStepBtn'),
-  backStepBtn: getElement<HTMLButtonElement>('backStepBtn'),
-  sessionKeyInput: getElement<HTMLInputElement>('sessionKeyInput'),
-  connectBtn: getElement<HTMLButtonElement>('connectBtn'),
-  sessionKeyError: getElement<HTMLParagraphElement>('sessionKeyError'),
-  refreshBtn: getElement<HTMLButtonElement>('refreshBtn'),
-  minimizeBtn: getElement<HTMLButtonElement>('minimizeBtn'),
-  closeBtn: getElement<HTMLButtonElement>('closeBtn'),
-
-  sessionPercentage: getElement<HTMLSpanElement>('sessionPercentage'),
-  sessionProgress: getElement<HTMLDivElement>('sessionProgress'),
-  sessionTimer: getElement<SVGCircleElement>('sessionTimer'),
-  sessionTimeText: getElement<HTMLDivElement>('sessionTimeText'),
-  sessionUsageRing: getElement<SVGCircleElement>('sessionUsageRing'),
-
-  weeklyPercentage: getElement<HTMLSpanElement>('weeklyPercentage'),
-  weeklyProgress: getElement<HTMLDivElement>('weeklyProgress'),
-  weeklyTimer: getElement<SVGCircleElement>('weeklyTimer'),
-  weeklyTimeText: getElement<HTMLDivElement>('weeklyTimeText'),
-  weeklyUsageRing: getElement<SVGCircleElement>('weeklyUsageRing'),
-
-  sonnetRow: getElement<HTMLDivElement>('sonnetRow'),
-  sonnetPercentage: getElement<HTMLSpanElement>('sonnetPercentage'),
-  sonnetProgress: getElement<HTMLDivElement>('sonnetProgress'),
-  sonnetTimer: getElement<SVGCircleElement>('sonnetTimer'),
-  sonnetTimeText: getElement<HTMLDivElement>('sonnetTimeText'),
-
-  statusBar: getElement<HTMLDivElement>('statusBar'),
-  statusText: getElement<HTMLSpanElement>('statusText'),
-  graphToggleBtn: getElement<HTMLButtonElement>('graphToggleBtn'),
-  graphSection: getElement<HTMLDivElement>('graphSection'),
-  usageChart: getElement<HTMLCanvasElement>('usageChart'),
-
-  pieToggleBtn: getElement<HTMLButtonElement>('pieToggleBtn'),
-  pieSection: getElement<HTMLDivElement>('pieSection'),
-  pieChart: getElement<HTMLCanvasElement>('pieChart'),
-  extraUsageToggleBtn: getElement<HTMLButtonElement>('extraUsageToggleBtn'),
-
-  expandSection: getElement<HTMLDivElement>('expandSection'),
-  extraRows: getElement<HTMLDivElement>('extraRows'),
-
-  settingsBtn: getElement<HTMLButtonElement>('settingsBtn'),
-  settingsOverlay: getElement<HTMLDivElement>('settingsOverlay'),
-  settingsContent: getElement<HTMLDivElement>('settingsContent'),
-  closeSettingsBtn: getElement<HTMLButtonElement>('closeSettingsBtn'),
-  logoutBtn: getElement<HTMLButtonElement>('logoutBtn'),
-  clearHistoryBtn: getElement<HTMLButtonElement>('clearHistoryBtn'),
-  coffeeBtn: getElement<HTMLButtonElement>('coffeeBtn'),
-  coffeeBtnAlt: getElement<HTMLButtonElement>('coffeeBtnAlt'),
-  refreshIntervalSlider: getElement<HTMLInputElement>('refreshIntervalSlider'),
-  refreshIntervalValue: getElement<HTMLSpanElement>('refreshIntervalValue'),
-  autoStartSection: getElement<HTMLDivElement>('autoStartSection'),
-  autoStartToggle: getElement<HTMLInputElement>('autoStartToggle'),
-  themeDropdown: getElement<HTMLSelectElement>('themeDropdown'),
-  backgroundHueDropdown: getElement<HTMLSelectElement>('backgroundHueDropdown'),
-
-  // Codex
-  codexSection: getElement<HTMLDivElement>('codexSection'),
-  codexLoginContainer: getElement<HTMLDivElement>('codexLoginContainer'),
-  codexContent: getElement<HTMLDivElement>('codexContent'),
-  codexAutoDetectBtn: getElement<HTMLButtonElement>('codexAutoDetectBtn'),
-  codexManualBtn: getElement<HTMLButtonElement>('codexManualBtn'),
-  codexManualInput: getElement<HTMLDivElement>('codexManualInput'),
-  codexTokenInput: getElement<HTMLInputElement>('codexTokenInput'),
-  codexSaveBtn: getElement<HTMLButtonElement>('codexSaveBtn'),
-  codexTokenError: getElement<HTMLParagraphElement>('codexTokenError'),
-  codexBackBtn: getElement<HTMLButtonElement>('codexBackBtn'),
-  codexLoginError: getElement<HTMLParagraphElement>('codexLoginError'),
-  codexStatusText: getElement<HTMLSpanElement>('codexStatusText'),
-  codexGraphToggleBtn: getElement<HTMLButtonElement>('codexGraphToggleBtn'),
-  codexGraphSection: getElement<HTMLDivElement>('codexGraphSection'),
-  codexUsageChart: getElement<HTMLCanvasElement>('codexUsageChart'),
-  codexPieToggleBtn: getElement<HTMLButtonElement>('codexPieToggleBtn'),
-  codexPieSection: getElement<HTMLDivElement>('codexPieSection'),
-  codexPieChart: getElement<HTMLCanvasElement>('codexPieChart'),
-
-  codexSessionProgress: getElement<HTMLDivElement>('codexSessionProgress'),
-  codexSessionPercentage: getElement<HTMLSpanElement>('codexSessionPercentage'),
-  codexSessionTimer: getElement<SVGCircleElement>('codexSessionTimer'),
-  codexSessionTimeText: getElement<HTMLDivElement>('codexSessionTimeText'),
-  codexSessionUsageRing: getElement<SVGCircleElement>('codexSessionUsageRing'),
-
-  codexWeeklyProgress: getElement<HTMLDivElement>('codexWeeklyProgress'),
-  codexWeeklyPercentage: getElement<HTMLSpanElement>('codexWeeklyPercentage'),
-  codexWeeklyTimer: getElement<SVGCircleElement>('codexWeeklyTimer'),
-  codexWeeklyTimeText: getElement<HTMLDivElement>('codexWeeklyTimeText'),
-  codexWeeklyUsageRing: getElement<SVGCircleElement>('codexWeeklyUsageRing'),
+function handleResize(): void {
+  resizeWidget({
+    isSettingsOpen,
+    isGraphVisible: claudeProvider.isGraphVisible,
+    isPieVisible: claudeProvider.isPieVisible,
+    isExpanded: claudeProvider.isExpanded,
+    codexHasData: codexProvider.hasData,
+    isCodexGraphVisible: codexProvider.isCodexGraphVisible,
+    isCodexPieVisible: codexProvider.isCodexPieVisible,
+    copilotHasData: false,
+    geminiHasData: geminiProvider.hasData,
+  })
 }
 
 function clampRefreshMinutes(value: number): number {
@@ -197,21 +44,78 @@ function updateRefreshIntervalUI(minutes: number): void {
   elements.refreshIntervalValue.textContent = formatRefreshInterval(minutes)
 }
 
-function resizeForSettings(): void {
-  const contentHeight = Math.ceil(elements.settingsContent.getBoundingClientRect().height)
-  const height = Math.max(WIDGET_HEIGHT_COLLAPSED, contentHeight + 140)
-  window.electronAPI.resizeWindow(height)
-}
-
 async function loadRefreshInterval(): Promise<void> {
   const saved = await window.electronAPI.getRefreshIntervalMinutes()
   refreshIntervalMinutes = clampRefreshMinutes(saved)
   updateRefreshIntervalUI(refreshIntervalMinutes)
 }
 
+const claudeProvider = new ClaudeProvider({
+  onResize: handleResize,
+  onDataRefresh: refreshAllUsageData,
+  getRefreshInterval: () => refreshIntervalMinutes,
+  onLoginStateChange: (isLoggedIn: boolean) => {
+    if (isLoggedIn) {
+      showMainContent()
+      void codexProvider.init()
+      // void copilotProvider.init()
+      void geminiProvider.init()
+      void refreshAllUsageData()
+      startAutoUpdate()
+    } else {
+      showLoginState()
+    }
+  }
+})
+
+const codexProvider = new CodexProvider({
+  onResize: handleResize,
+  onDataChange: refreshAllUsageData,
+})
+
+// const copilotProvider = new CopilotProvider({
+//   onResize: handleResize,
+//   onDataChange: refreshAllUsageData,
+// })
+
+const geminiProvider = new GeminiProvider({
+  onResize: handleResize,
+  onDataChange: refreshAllUsageData,
+})
+
 async function refreshAllUsageData(): Promise<void> {
-  await fetchUsageData()
-  await fetchCodexUsageData()
+  await claudeProvider.fetchData()
+  await codexProvider.fetchData()
+  // await copilotProvider.fetchData()
+  await geminiProvider.fetchData()
+
+  const claudeData = claudeProvider.latestUsageData
+  if (!claudeData) return
+
+  const codexData = codexProvider.latestCodexData
+  const geminiData = geminiProvider.latestGeminiData
+  const historyEntry: UsageHistoryEntry = {
+    timestamp: claudeProvider.lastRefreshTime || Date.now(),
+    session: claudeData?.five_hour?.utilization || 0,
+    weekly: claudeData?.seven_day?.utilization || 0,
+    sonnet: claudeData?.seven_day_sonnet?.utilization || 0,
+    opus: claudeData?.seven_day_opus?.utilization,
+    cowork: claudeData?.seven_day_cowork?.utilization,
+    oauthApps: claudeData?.seven_day_oauth_apps?.utilization,
+    codexSession: codexData?.five_hour?.utilization,
+    codexWeekly: codexData?.seven_day?.utilization,
+    geminiDaily: geminiData?.daily?.utilization,
+  }
+  await window.electronAPI.saveUsageHistoryEntry(historyEntry)
+
+  window.electronAPI.updateTrayUsage({
+    session: historyEntry.session,
+    weekly: historyEntry.weekly,
+    sonnet: historyEntry.sonnet,
+    codexSession: historyEntry.codexSession,
+    codexWeekly: historyEntry.codexWeekly,
+    geminiDaily: historyEntry.geminiDaily,
+  })
 }
 
 async function setRefreshIntervalMinutes(minutes: number): Promise<void> {
@@ -219,77 +123,7 @@ async function setRefreshIntervalMinutes(minutes: number): Promise<void> {
   const stored = await window.electronAPI.setRefreshIntervalMinutes(clamped)
   refreshIntervalMinutes = clampRefreshMinutes(stored)
   updateRefreshIntervalUI(refreshIntervalMinutes)
-  if (credentials?.sessionKey && credentials.organizationId) {
-    startAutoUpdate()
-  }
-}
-
-// Theme management
-function applyTheme(theme: string): void {
-  document.documentElement.setAttribute('data-theme', theme)
-  requestAnimationFrame(() => {
-    if (latestUsageData) {
-      if (isGraphVisible) void renderUsageChart()
-      if (isPieVisible) renderPieChart()
-    }
-
-    if (latestCodexData) {
-      if (isCodexGraphVisible) void renderCodexUsageChart()
-      if (isCodexPieVisible) renderCodexPieChart()
-    }
-  })
-}
-
-function applyBackgroundHue(backgroundHue: string): void {
-  if (backgroundHue === 'match') {
-    document.documentElement.removeAttribute('data-background-hue')
-    return
-  }
-
-  document.documentElement.setAttribute('data-background-hue', backgroundHue)
-}
-
-async function loadTheme(): Promise<void> {
-  try {
-    const savedTheme = await window.electronAPI.getTheme()
-    const theme = savedTheme || 'purple'
-    elements.themeDropdown.value = theme
-    applyTheme(theme)
-  } catch (error) {
-    console.warn('Failed to load theme, using purple as default:', error)
-    applyTheme('purple')
-  }
-}
-
-async function loadBackgroundHue(): Promise<void> {
-  try {
-    const savedBackgroundHue = await window.electronAPI.getBackgroundHue()
-    const backgroundHue = savedBackgroundHue || 'match'
-    elements.backgroundHueDropdown.value = backgroundHue
-    applyBackgroundHue(backgroundHue)
-  } catch (error) {
-    console.warn('Failed to load background hue, matching theme:', error)
-    applyBackgroundHue('match')
-  }
-}
-
-async function setTheme(theme: string): Promise<void> {
-  try {
-    await window.electronAPI.setTheme(theme)
-    applyTheme(theme)
-  } catch (error) {
-    console.error('Failed to save theme:', error)
-  }
-}
-
-async function setBackgroundHue(backgroundHue: string): Promise<void> {
-  try {
-    await window.electronAPI.setBackgroundHue(backgroundHue)
-    applyBackgroundHue(backgroundHue)
-    applyTheme(elements.themeDropdown.value)
-  } catch (error) {
-    console.error('Failed to save background hue:', error)
-  }
+  startAutoUpdate()
 }
 
 // Auto-start functionality
@@ -341,54 +175,22 @@ async function init(): Promise<void> {
     document.body.classList.add('platform-linux')
   }
 
+  onThemeChange(() => {
+    if (claudeProvider.hasData) claudeProvider.renderCharts()
+
+    if (codexProvider.hasData) codexProvider.renderCharts()
+  })
+
   setupEventListeners()
   await loadRefreshInterval()
   await loadTheme()
   await loadBackgroundHue()
   await checkAutoStartSupport()
-  credentials = await window.electronAPI.getCredentials()
-
-  if (credentials.sessionKey && credentials.organizationId) {
-    showMainContent()
-    await initCodexSection()
-    await refreshAllUsageData()
-    startAutoUpdate()
-  } else {
-    showLoginRequired()
-  }
+  await claudeProvider.init()
 }
 
 // Event Listeners
 function setupEventListeners(): void {
-  // Step 1: Login via BrowserWindow
-  elements.autoDetectBtn.addEventListener('click', handleAutoDetect)
-
-  // Step navigation
-  elements.nextStepBtn.addEventListener('click', () => {
-    elements.loginStep1.style.display = 'none'
-    elements.loginStep2.style.display = 'block'
-    elements.sessionKeyInput.focus()
-  })
-
-  elements.backStepBtn.addEventListener('click', () => {
-    elements.loginStep2.style.display = 'none'
-    elements.loginStep1.style.display = 'flex'
-    elements.sessionKeyError.textContent = ''
-  })
-
-  // Open browser link in step 2
-  elements.openBrowserLink.addEventListener('click', (e: Event) => {
-    e.preventDefault()
-    window.electronAPI.openExternal('https://claude.ai')
-  })
-
-  // Step 2: Manual sessionKey connect
-  elements.connectBtn.addEventListener('click', handleConnect)
-  elements.sessionKeyInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') handleConnect()
-    elements.sessionKeyError.textContent = ''
-  })
-
   elements.refreshBtn.addEventListener('click', async () => {
     debugLog('Refresh button clicked')
     elements.refreshBtn.classList.add('spinning')
@@ -407,36 +209,6 @@ function setupEventListeners(): void {
     window.electronAPI.closeWindow()
   })
 
-  // Graph toggle
-  elements.graphToggleBtn.addEventListener('click', () => {
-    isGraphVisible = !isGraphVisible
-    elements.graphSection.style.display = isGraphVisible ? 'block' : 'none'
-    elements.graphToggleBtn.classList.toggle('active', isGraphVisible)
-    if (isGraphVisible) {
-      renderUsageChart()
-    }
-    resizeWidget()
-  })
-
-  // Pie chart toggle
-  elements.pieToggleBtn.addEventListener('click', () => {
-    isPieVisible = !isPieVisible
-    elements.pieSection.style.display = isPieVisible ? 'block' : 'none'
-    elements.pieToggleBtn.classList.toggle('active', isPieVisible)
-    if (isPieVisible) {
-      renderPieChart()
-    }
-    resizeWidget()
-  })
-
-  // Extra usage toggle
-  elements.extraUsageToggleBtn.addEventListener('click', () => {
-    isExpanded = !isExpanded
-    elements.extraUsageToggleBtn.classList.toggle('active', isExpanded)
-    elements.expandSection.style.display = isExpanded ? 'block' : 'none'
-    resizeWidget()
-  })
-
   // Settings calls
   elements.settingsBtn.addEventListener('click', () => {
     elements.settingsOverlay.style.display = 'flex'
@@ -447,7 +219,7 @@ function setupEventListeners(): void {
   elements.closeSettingsBtn.addEventListener('click', () => {
     elements.settingsOverlay.style.display = 'none'
     isSettingsOpen = false
-    window.electronAPI.resizeWindow(lastNonSettingsHeight)
+    restoreNonSettingsHeight()
   })
 
   elements.refreshIntervalSlider.addEventListener('input', (event: Event) => {
@@ -480,10 +252,9 @@ function setupEventListeners(): void {
 
   elements.logoutBtn.addEventListener('click', async () => {
     await window.electronAPI.deleteCredentials()
-    credentials = { sessionKey: null, organizationId: null }
     elements.settingsOverlay.style.display = 'none'
     isSettingsOpen = false
-    showLoginRequired()
+    showLoginState()
     window.electronAPI.resizeWindow(WIDGET_HEIGHT_COLLAPSED)
   })
 
@@ -493,12 +264,8 @@ function setupEventListeners(): void {
     setTimeout(() => {
       elements.clearHistoryBtn.textContent = 'Clear History'
     }, 1500)
-    if (isGraphVisible) {
-      renderUsageChart()
-    }
-    if (isCodexGraphVisible) {
-      renderCodexUsageChart()
-    }
+    claudeProvider.renderCharts()
+    if (codexProvider.hasData) codexProvider.renderCharts()
   })
 
   elements.coffeeBtn.addEventListener('click', () => {
@@ -514,632 +281,24 @@ function setupEventListeners(): void {
     await refreshAllUsageData()
   })
 
-  // Listen for session expiration events (403 errors)
-  window.electronAPI.onSessionExpired(() => {
-    debugLog('Session expired event received')
-    credentials = { sessionKey: null, organizationId: null }
-    showLoginRequired()
-  })
-
   // Forward debug logs from main process to renderer DevTools console
   window.electronAPI.onDebugLog((label: string, data: unknown) => {
     console.log('[Debug]', label, data)
   })
 
-  // Codex login flow
-  elements.codexAutoDetectBtn.addEventListener('click', handleCodexAutoDetect)
-  elements.codexManualBtn.addEventListener('click', () => {
-    elements.codexManualInput.style.display = 'block'
-    elements.codexAutoDetectBtn.style.display = 'none'
-    elements.codexManualBtn.style.display = 'none'
-    elements.codexTokenInput.focus()
-  })
-  elements.codexBackBtn.addEventListener('click', () => {
-    elements.codexManualInput.style.display = 'none'
-    elements.codexAutoDetectBtn.style.display = ''
-    elements.codexManualBtn.style.display = ''
-    elements.codexTokenError.textContent = ''
-  })
-  elements.codexSaveBtn.addEventListener('click', handleCodexManualToken)
-  elements.codexTokenInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') handleCodexManualToken()
-    elements.codexTokenError.textContent = ''
-  })
-
-  elements.codexGraphToggleBtn.addEventListener('click', () => {
-    isCodexGraphVisible = !isCodexGraphVisible
-    elements.codexGraphSection.style.display = isCodexGraphVisible ? 'block' : 'none'
-    elements.codexGraphToggleBtn.classList.toggle('active', isCodexGraphVisible)
-    if (isCodexGraphVisible) {
-      renderCodexUsageChart()
-    }
-    resizeWidget()
-  })
-
-  elements.codexPieToggleBtn.addEventListener('click', () => {
-    isCodexPieVisible = !isCodexPieVisible
-    elements.codexPieSection.style.display = isCodexPieVisible ? 'block' : 'none'
-    elements.codexPieToggleBtn.classList.toggle('active', isCodexPieVisible)
-    if (isCodexPieVisible) {
-      renderCodexPieChart()
-    }
-    resizeWidget()
-  })
-
-  window.electronAPI.onCodexSessionExpired(() => {
-    debugLog('Codex session expired')
-    latestCodexData = null
-    codexHasData = false
-    showCodexLogin()
-    resizeWidget()
-  })
-}
-
-// Handle manual sessionKey connect
-async function handleConnect(): Promise<void> {
-  const sessionKey = elements.sessionKeyInput.value.trim()
-  if (!sessionKey) {
-    elements.sessionKeyError.textContent = 'Please paste your session key'
-    return
-  }
-
-  elements.connectBtn.disabled = true
-  elements.connectBtn.textContent = '...'
-  elements.sessionKeyError.textContent = ''
-
-  try {
-    const result = await window.electronAPI.validateSessionKey(sessionKey)
-    if (result.success) {
-      credentials = { sessionKey, organizationId: result.organizationId ?? null }
-      await window.electronAPI.saveCredentials({ sessionKey, organizationId: result.organizationId })
-      elements.sessionKeyInput.value = ''
-      showMainContent()
-      await initCodexSection()
-      await refreshAllUsageData()
-      startAutoUpdate()
-    } else {
-      elements.sessionKeyError.textContent = result.error || 'Invalid session key'
-    }
-  } catch {
-    elements.sessionKeyError.textContent = 'Connection failed. Check your key.'
-  } finally {
-    elements.connectBtn.disabled = false
-    elements.connectBtn.textContent = 'Connect'
-  }
-}
-
-// Handle auto-detect from browser cookies
-async function handleAutoDetect(): Promise<void> {
-  elements.autoDetectBtn.disabled = true
-  elements.autoDetectBtn.textContent = 'Waiting...'
-  elements.autoDetectError.textContent = ''
-
-  try {
-    const result = await window.electronAPI.detectSessionKey()
-    if (!result.success) {
-      elements.autoDetectError.textContent = result.error || 'Login failed'
-      return
-    }
-
-    // Got sessionKey from login, now validate it
-    elements.autoDetectBtn.textContent = 'Validating...'
-    const validation = await window.electronAPI.validateSessionKey(result.sessionKey!)
-
-    if (validation.success) {
-      credentials = {
-        sessionKey: result.sessionKey!,
-        organizationId: validation.organizationId ?? null,
-      }
-      await window.electronAPI.saveCredentials({
-        sessionKey: result.sessionKey!,
-        organizationId: validation.organizationId,
-      })
-      showMainContent()
-      await initCodexSection()
-      await refreshAllUsageData()
-      startAutoUpdate()
-    } else {
-      elements.autoDetectError.textContent = 'Session invalid. Try again or use Manual →'
-    }
-  } catch (error) {
-    elements.autoDetectError.textContent = (error as Error).message || 'Login failed'
-  } finally {
-    elements.autoDetectBtn.disabled = false
-    elements.autoDetectBtn.textContent = 'Log in'
-  }
-}
-
-// Fetch usage data from Claude API
-async function fetchUsageData(): Promise<void> {
-  debugLog('fetchUsageData called')
-
-  if (!credentials?.sessionKey || !credentials?.organizationId) {
-    debugLog('Missing credentials, showing login')
-    showLoginRequired()
-    return
-  }
-
-  try {
-    debugLog('Calling electronAPI.fetchUsageData...')
-    const data = await window.electronAPI.fetchUsageData()
-    debugLog('Received usage data:', data)
-    isOffline = false
-    stopOfflineRetry()
-    updateUI(data)
-
-    // Record usage history entry
-    lastRefreshTime = Date.now()
-    updateStatusText()
-    startStatusTimer()
-
-    const historyEntry: UsageHistoryEntry = {
-      timestamp: lastRefreshTime,
-      session: data.five_hour?.utilization || 0,
-      weekly: data.seven_day?.utilization || 0,
-      sonnet: data.seven_day_sonnet?.utilization || 0,
-      opus: data.seven_day_opus?.utilization,
-      cowork: data.seven_day_cowork?.utilization,
-      oauthApps: data.seven_day_oauth_apps?.utilization,
-      codexSession: latestCodexData?.five_hour?.utilization,
-      codexWeekly: latestCodexData?.seven_day?.utilization,
-    }
-    await window.electronAPI.saveUsageHistoryEntry(historyEntry)
-
-    // Update tray with latest stats (include Codex if available)
-    window.electronAPI.updateTrayUsage({
-      session: historyEntry.session,
-      weekly: historyEntry.weekly,
-      sonnet: historyEntry.sonnet,
-      codexSession: latestCodexData?.five_hour?.utilization,
-      codexWeekly: latestCodexData?.seven_day?.utilization,
-    })
-
-    // Refresh graph if visible
-    if (isGraphVisible) {
-      renderUsageChart()
-    }
-
-    // Refresh pie chart if visible
-    if (isPieVisible) {
-      renderPieChart()
-    }
-    if (isCodexGraphVisible) {
-      renderCodexUsageChart()
-    }
-  } catch (error) {
-    console.error('Error fetching usage data:', error)
-    const err = error as Error
-    if (err.message.includes('SessionExpired') || err.message.includes('Unauthorized')) {
-      credentials = { sessionKey: null, organizationId: null }
-      showLoginRequired()
-    } else {
-      // Network or API error — try to show cached data
-      const cached = await window.electronAPI.getCachedUsage()
-      if (cached) {
-        isOffline = true
-        stopAutoUpdate()                            // pause normal refresh while offline
-        updateUI(cached.data)
-        lastRefreshTime = cached.timestamp          // use original fetch time, NOT Date.now()
-        updateStatusText()
-        startStatusTimer()
-        startOfflineRetry()
-      }
-      // If no cache: remain on whatever screen was already shown (login or loading state)
-    }
-  }
-}
-
-// Check if there's no usage data
-function hasNoUsage(data: UsageData): boolean {
-  const sessionUtilization = data.five_hour?.utilization || 0
-  const sessionResetsAt = data.five_hour?.resets_at
-  const weeklyUtilization = data.seven_day?.utilization || 0
-  const weeklyResetsAt = data.seven_day?.resets_at
-
-  return sessionUtilization === 0 && !sessionResetsAt && weeklyUtilization === 0 && !weeklyResetsAt
-}
-
-// Update UI with usage data
-// Extra row label mapping for API fields
-interface ExtraRowConfig {
-  label: string
-  color: string
-}
-
-const EXTRA_ROW_CONFIG: Record<string, ExtraRowConfig> = {
-  // seven_day_sonnet is shown as a dedicated row above, not in extras
-  seven_day_opus: { label: 'Opus (7d)', color: 'opus' },
-  seven_day_cowork: { label: 'Cowork (7d)', color: 'weekly' },
-  seven_day_oauth_apps: { label: 'OAuth Apps (7d)', color: 'weekly' },
-  extra_usage: { label: 'Extra Usage', color: 'extra' },
-}
-
-function buildExtraRows(data: UsageData): number {
-  elements.extraRows.innerHTML = ''
-  let count = 0
-  const formatGBP = (cents: number): string =>
-    new Intl.NumberFormat('en-GB', {
-      style: 'currency',
-      currency: 'GBP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(cents / 100)
-
-  for (const [key, config] of Object.entries(EXTRA_ROW_CONFIG)) {
-    const value = data[key] as (UsageTimePeriod & ExtraUsage) | undefined
-    // extra_usage is valid with utilization OR balance_cents (prepaid only)
-    const hasUtilization = value && value.utilization !== undefined
-    const hasBalance = key === 'extra_usage' && value && value.balance_cents != null
-    if (!hasUtilization && !hasBalance) continue
-
-    const utilization = value!.utilization || 0
-    const resetsAt = value!.resets_at
-    const colorClass = config.color
-
-    let percentageHTML: string
-    let timerHTML: string
-
-    if (key === 'extra_usage') {
-      const extraValue = value as ExtraUsage
-      // Percentage area → spending amounts
-      if (extraValue.used_cents != null && extraValue.limit_cents != null) {
-        const usedAmount = formatGBP(extraValue.used_cents)
-        const limitAmount = formatGBP(extraValue.limit_cents)
-        percentageHTML = `<span class="usage-percentage extra-spending">${usedAmount}/${limitAmount}</span>`
-      } else {
-        percentageHTML = `<span class="usage-percentage">${Math.round(utilization)}%</span>`
-      }
-      // Timer area → prepaid balance
-      if (extraValue.balance_cents != null) {
-        const balanceAmount = formatGBP(extraValue.balance_cents)
-        timerHTML = `
-                    <div class="timer-container">
-                        <span class="timer-text extra-balance">Bal ${balanceAmount}</span>
-                    </div>
-                `
-      } else {
-        timerHTML = `<div class="timer-container"></div>`
-      }
-    } else {
-      percentageHTML = `<span class="usage-percentage">${Math.round(utilization)}%</span>`
-      const totalMinutes = key.includes('seven_day') ? 7 * 24 * 60 : 5 * 60
-      timerHTML = `
-                <div class="timer-container">
-                    <div class="timer-text" data-resets="${resetsAt || ''}" data-total="${totalMinutes}">--:--</div>
-                    <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
-                        <circle class="timer-bg" cx="12" cy="12" r="10" />
-                        <circle class="timer-progress ${colorClass}" cx="12" cy="12" r="10"
-                            style="stroke-dasharray: 63; stroke-dashoffset: 63" />
-                    </svg>
-                </div>
-            `
-    }
-
-    const row = document.createElement('div')
-    row.className = 'usage-section'
-    row.innerHTML = `
-            <span class="usage-label">${config.label}</span>
-            <div class="progress-bar">
-                <div class="progress-fill ${colorClass}" style="width: ${Math.min(utilization, 100)}%"></div>
-            </div>
-            ${percentageHTML}
-            ${timerHTML}
-        `
-
-    // Apply warning/danger classes
-    const progressEl = row.querySelector('.progress-fill')
-    if (progressEl) {
-      if (utilization >= 90) progressEl.classList.add('danger')
-      else if (utilization >= 75) progressEl.classList.add('warning')
-    }
-
-    elements.extraRows.appendChild(row)
-    count++
-  }
-
-  // Hide toggle if no extra rows
-  elements.extraUsageToggleBtn.style.display = count > 0 ? 'flex' : 'none'
-  if (count === 0 && isExpanded) {
-    isExpanded = false
-    elements.extraUsageToggleBtn.classList.remove('active')
-    elements.expandSection.style.display = 'none'
-  }
-
-  return count
-}
-
-function refreshExtraTimers(): void {
-  const timerTexts = elements.extraRows.querySelectorAll<HTMLDivElement>('.timer-text')
-  const timerCircles = elements.extraRows.querySelectorAll<SVGCircleElement>('.timer-progress')
-
-  timerTexts.forEach((textEl, i) => {
-    const resetsAt = textEl.dataset.resets
-    const totalMinutes = parseInt(textEl.dataset.total || '0')
-    const circleEl = timerCircles[i]
-    if (resetsAt && circleEl) {
-      updateTimer(circleEl, textEl, resetsAt, totalMinutes)
-    }
-  })
-}
-
-function resizeWidget(): void {
-  if (elements.mainContent.style.display === 'none') {
-    lastNonSettingsHeight = WIDGET_HEIGHT_COLLAPSED
-    if (!isSettingsOpen) {
-      window.electronAPI.resizeWindow(WIDGET_HEIGHT_COLLAPSED)
-    }
-    return
-  }
-
-  let height = WIDGET_HEIGHT_COLLAPSED
-
-  // Add Sonnet row if visible
-  const sonnetVisible = elements.sonnetRow.style.display !== 'none'
-  if (sonnetVisible) {
-    height += SONNET_ROW_HEIGHT
-  }
-
-  // Add graph if visible
-  if (isGraphVisible) {
-    height += GRAPH_HEIGHT
-  }
-
-  // Add pie chart if visible
-  if (isPieVisible) {
-    height += PIE_HEIGHT
-  }
-
-  // Add expanded extra rows
-  const extraCount = elements.extraRows.children.length
-  if (isExpanded && extraCount > 0) {
-    height += 12 + extraCount * WIDGET_ROW_HEIGHT
-  }
-
-  // Codex section is always visible on the same page
-  if (codexHasData) {
-    height += CODEX_SECTION_BASE_HEIGHT + CODEX_STATUS_HEIGHT
-    if (isCodexGraphVisible) {
-      height += CODEX_GRAPH_HEIGHT
-    }
-    if (isCodexPieVisible) {
-      height += CODEX_PIE_HEIGHT
-    }
-  } else {
-    height += CODEX_LOGIN_HEIGHT
-  }
-
-  // Ensure window is never smaller than actual rendered content (and can still retract).
-  const titleBarHeight = Math.ceil(elements.titleBar.getBoundingClientRect().height)
-  const mainContentHeight = Math.ceil(elements.mainContent.scrollHeight)
-  const measuredHeight = titleBarHeight + mainContentHeight + WIDGET_HEIGHT_BUFFER
-  height = Math.max(height + WIDGET_HEIGHT_BUFFER, measuredHeight)
-
-  lastNonSettingsHeight = height
-  if (!isSettingsOpen) {
-    window.electronAPI.resizeWindow(height)
-  }
-}
-
-function updateUI(data: UsageData): void {
-  latestUsageData = data
-
-  showMainContent()
-
-  // Show/hide Weekly Sonnet row
-  const sonnetData = data.seven_day_sonnet
-  if (sonnetData && sonnetData.utilization !== undefined) {
-    elements.sonnetRow.style.display = ''
-    updateProgressBar(elements.sonnetProgress, elements.sonnetPercentage, sonnetData.utilization)
-    updateTimer(elements.sonnetTimer, elements.sonnetTimeText, sonnetData.resets_at ?? null, 7 * 24 * 60)
-  } else {
-    elements.sonnetRow.style.display = 'none'
-  }
-
-  buildExtraRows(data)
-  refreshTimers()
-  if (isExpanded) refreshExtraTimers()
-  resizeWidget()
-  startCountdown()
-}
-
-// Track if we've already triggered a refresh for expired timers
-let sessionResetTriggered = false
-let weeklyResetTriggered = false
-
-function refreshTimers(): void {
-  if (!latestUsageData) return
-
-  // Session data
-  const sessionUtilization = latestUsageData.five_hour?.utilization || 0
-  const sessionResetsAt = latestUsageData.five_hour?.resets_at
-
-  // Check if session timer has expired and we need to refresh
-  if (sessionResetsAt) {
-    const sessionDiff = new Date(sessionResetsAt).getTime() - Date.now()
-    if (sessionDiff <= 0 && !sessionResetTriggered) {
-      sessionResetTriggered = true
-      debugLog('Session timer expired, triggering refresh...')
-      // Wait a few seconds for the server to update, then refresh
-      setTimeout(() => {
-        fetchUsageData()
-      }, 3000)
-    } else if (sessionDiff > 0) {
-      sessionResetTriggered = false // Reset flag when timer is active again
-    }
-  }
-
-  updateProgressBar(elements.sessionProgress, elements.sessionPercentage, sessionUtilization)
-  updateUsageRing(elements.sessionUsageRing, sessionUtilization)
-
-  updateTimer(elements.sessionTimer, elements.sessionTimeText, sessionResetsAt ?? null, 5 * 60) // 5 hours in minutes
-
-  // Weekly data
-  const weeklyUtilization = latestUsageData.seven_day?.utilization || 0
-  const weeklyResetsAt = latestUsageData.seven_day?.resets_at
-
-  // Check if weekly timer has expired and we need to refresh
-  if (weeklyResetsAt) {
-    const weeklyDiff = new Date(weeklyResetsAt).getTime() - Date.now()
-    if (weeklyDiff <= 0 && !weeklyResetTriggered) {
-      weeklyResetTriggered = true
-      debugLog('Weekly timer expired, triggering refresh...')
-      setTimeout(() => {
-        fetchUsageData()
-      }, 3000)
-    } else if (weeklyDiff > 0) {
-      weeklyResetTriggered = false
-    }
-  }
-
-  updateProgressBar(elements.weeklyProgress, elements.weeklyPercentage, weeklyUtilization)
-  updateUsageRing(elements.weeklyUsageRing, weeklyUtilization)
-
-  updateTimer(
-    elements.weeklyTimer,
-    elements.weeklyTimeText,
-    weeklyResetsAt ?? null,
-    7 * 24 * 60, // 7 days in minutes
-  )
-}
-
-function startCountdown(): void {
-  if (countdownInterval) clearInterval(countdownInterval)
-  countdownInterval = setInterval(() => {
-    refreshTimers()
-    refreshSonnetTimer()
-    if (isExpanded) refreshExtraTimers()
-  }, 1000)
-}
-
-function refreshSonnetTimer(): void {
-  if (!latestUsageData) return
-  const sonnetData = latestUsageData.seven_day_sonnet
-  if (!sonnetData || sonnetData.utilization === undefined) return
-  if (elements.sonnetRow.style.display === 'none') return
-
-  updateProgressBar(elements.sonnetProgress, elements.sonnetPercentage, sonnetData.utilization)
-  updateTimer(elements.sonnetTimer, elements.sonnetTimeText, sonnetData.resets_at ?? null, 7 * 24 * 60)
-}
-
-// Update progress bar
-function updateProgressBar(
-  progressElement: HTMLDivElement,
-  percentageElement: HTMLSpanElement,
-  value: number,
-): void {
-  const percentage = Math.min(Math.max(value, 0), 100)
-
-  progressElement.style.width = `${percentage}%`
-  percentageElement.textContent = `${Math.round(percentage)}%`
-
-  // Update color based on usage level
-  progressElement.classList.remove('warning', 'danger')
-  if (percentage >= 90) {
-    progressElement.classList.add('danger')
-  } else if (percentage >= 75) {
-    progressElement.classList.add('warning')
-  }
-}
-
-// Update circular timer
-function updateTimer(
-  timerElement: SVGCircleElement,
-  textElement: HTMLElement,
-  resetsAt: string | null | undefined,
-  totalMinutes: number,
-): void {
-  if (!resetsAt) {
-    textElement.textContent = '--:--'
-    textElement.style.opacity = '0.5'
-    textElement.title = 'Starts when a message is sent'
-    timerElement.style.strokeDashoffset = '63'
-    return
-  }
-
-  // Clear the greyed out styling and tooltip when timer is active
-  textElement.style.opacity = '1'
-  textElement.title = ''
-
-  const resetDate = new Date(resetsAt)
-  const now = new Date()
-  const diff = resetDate.getTime() - now.getTime()
-
-  if (diff <= 0) {
-    textElement.textContent = 'Resetting...'
-    timerElement.style.strokeDashoffset = '0'
-    return
-  }
-
-  // Calculate remaining time
-  const hours = Math.floor(diff / (1000 * 60 * 60))
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-
-  // Format time display
-  if (hours >= 24) {
-    const days = Math.floor(hours / 24)
-    const remainingHours = hours % 24
-    textElement.textContent = `${days}d ${remainingHours}h`
-  } else if (hours > 0) {
-    textElement.textContent = `${hours}h ${minutes}m`
-  } else {
-    textElement.textContent = `${minutes}m`
-  }
-
-  // Calculate progress (elapsed percentage)
-  const totalMs = totalMinutes * 60 * 1000
-  const elapsedMs = totalMs - diff
-  const elapsedPercentage = (elapsedMs / totalMs) * 100
-
-  // Update circle (63 is ~2*pi*10)
-  const circumference = 63
-  const offset = circumference - (elapsedPercentage / 100) * circumference
-  timerElement.style.strokeDashoffset = String(offset)
-
-  // Update color based on remaining time
-  timerElement.classList.remove('warning', 'danger')
-  if (elapsedPercentage >= 90) {
-    timerElement.classList.add('danger')
-  } else if (elapsedPercentage >= 75) {
-    timerElement.classList.add('warning')
-  }
-}
-
-// Update inner usage ring (shows percentage utilization)
-function updateUsageRing(ringElement: SVGCircleElement, utilization: number): void {
-  const percentage = Math.min(Math.max(utilization, 0), 100)
-  const circumference = 2 * Math.PI * 6 // r=6, so ~37.7
-  const offset = circumference - (percentage / 100) * circumference
-  ringElement.style.strokeDashoffset = String(offset)
 }
 
 // UI State Management
-function showLoginRequired(): void {
+export function showLoginState(): void {
   elements.loadingContainer.style.display = 'none'
   elements.loginContainer.style.display = 'flex'
   elements.noUsageContainer.style.display = 'none'
   elements.mainContent.style.display = 'none'
-  // Reset to step 1
-  elements.loginStep1.style.display = 'flex'
-  elements.loginStep2.style.display = 'none'
-  elements.sessionKeyError.textContent = ''
-  elements.sessionKeyInput.value = ''
+  claudeProvider.showLogin()
   stopAutoUpdate()
-  if (statusInterval) {
-    clearInterval(statusInterval)
-    statusInterval = null
-  }
-  stopCodexCountdown()
-  stopCodexStatusTimer()
 }
 
-function showNoUsage(): void {
-  elements.loadingContainer.style.display = 'none'
-  elements.loginContainer.style.display = 'none'
-  elements.noUsageContainer.style.display = 'flex'
-  elements.mainContent.style.display = 'none'
-}
-
-function showMainContent(): void {
+export function showMainContent(): void {
   elements.loadingContainer.style.display = 'none'
   elements.loginContainer.style.display = 'none'
   elements.noUsageContainer.style.display = 'none'
@@ -1161,811 +320,6 @@ function stopAutoUpdate(): void {
   }
 }
 
-function startOfflineRetry(): void {
-  stopOfflineRetry()
-  offlineRetryInterval = setInterval(async () => {
-    try {
-      const data = await window.electronAPI.fetchUsageData()
-      // Success — back online
-      isOffline = false
-      stopOfflineRetry()
-      updateUI(data)
-      lastRefreshTime = Date.now()
-      updateStatusText()
-      startStatusTimer()
-      startAutoUpdate()
-    } catch {
-      // Still offline — statusInterval already ticking via startStatusTimer
-    }
-  }, refreshIntervalMinutes * 60 * 1000)
-}
-
-function stopOfflineRetry(): void {
-  if (offlineRetryInterval) {
-    clearInterval(offlineRetryInterval)
-    offlineRetryInterval = null
-  }
-}
-
-// Status bar "Refreshed X minutes ago" logic
-function updateStatusText(): void {
-  if (!lastRefreshTime) {
-    elements.statusText.textContent = isOffline ? 'Offline · No data' : 'Refreshed just now'
-    return
-  }
-  const elapsed = Date.now() - lastRefreshTime
-  const minutes = Math.floor(elapsed / 60000)
-  let timeStr: string
-  if (minutes < 1) {
-    timeStr = 'just now'
-  } else if (minutes === 1) {
-    timeStr = '1 minute ago'
-  } else {
-    timeStr = `${minutes} minutes ago`
-  }
-
-  if (isOffline) {
-    elements.statusText.textContent = `Offline · Last updated ${timeStr}`
-  } else {
-    elements.statusText.textContent = minutes < 1 ? 'Refreshed just now' : `Refreshed ${timeStr}`
-  }
-}
-
-function startStatusTimer(): void {
-  if (statusInterval) clearInterval(statusInterval)
-  statusInterval = setInterval(updateStatusText, 30000) // update every 30s
-}
-
-function updateCodexStatusText(): void {
-  if (!codexLastRefreshTime) {
-    elements.codexStatusText.textContent = 'Refreshed just now'
-    return
-  }
-  const elapsed = Date.now() - codexLastRefreshTime
-  const minutes = Math.floor(elapsed / 60000)
-  if (minutes < 1) {
-    elements.codexStatusText.textContent = 'Refreshed just now'
-  } else if (minutes === 1) {
-    elements.codexStatusText.textContent = 'Refreshed 1 minute ago'
-  } else {
-    elements.codexStatusText.textContent = `Refreshed ${minutes} minutes ago`
-  }
-}
-
-function startCodexStatusTimer(): void {
-  stopCodexStatusTimer()
-  codexStatusInterval = setInterval(updateCodexStatusText, 30000)
-}
-
-function stopCodexStatusTimer(): void {
-  if (codexStatusInterval) {
-    clearInterval(codexStatusInterval)
-    codexStatusInterval = null
-  }
-}
-
-// ─── Codex Functions ──────────────────────────────────────────────────────────
-
-async function initCodexSection(): Promise<void> {
-  const creds = await window.electronAPI.getCodexCredentials()
-  if (creds.accessToken) {
-    // Reserve Codex space immediately to avoid visible layout jump while data loads.
-    showCodexContent()
-    updateCodexUI(latestCodexData ?? {})
-    elements.codexStatusText.textContent = 'Refreshing...'
-    resizeWidget()
-  } else {
-    showCodexLogin()
-    resizeWidget()
-  }
-}
-
-function showCodexLogin(): void {
-  codexHasData = false
-  elements.codexLoginContainer.style.display = 'block'
-  elements.codexContent.style.display = 'none'
-  elements.codexManualInput.style.display = 'none'
-  elements.codexAutoDetectBtn.style.display = ''
-  elements.codexManualBtn.style.display = ''
-  elements.codexLoginError.textContent = ''
-  isCodexGraphVisible = false
-  isCodexPieVisible = false
-  elements.codexGraphSection.style.display = 'none'
-  elements.codexPieSection.style.display = 'none'
-  elements.codexGraphToggleBtn.classList.remove('active')
-  elements.codexPieToggleBtn.classList.remove('active')
-  stopCodexCountdown()
-  stopCodexStatusTimer()
-  elements.codexStatusText.textContent = 'Connect Codex to load usage'
-}
-
-function showCodexContent(): void {
-  elements.codexLoginContainer.style.display = 'none'
-  elements.codexContent.style.display = 'block'
-  codexHasData = true
-}
-
-async function fetchCodexUsageData(): Promise<void> {
-  try {
-    const data = await window.electronAPI.fetchCodexUsageData()
-    latestCodexData = data
-    showCodexContent()
-    updateCodexUI(data)
-    startCodexCountdown()
-    codexLastRefreshTime = Date.now()
-    updateCodexStatusText()
-    startCodexStatusTimer()
-
-    const codexHistoryEntry: UsageHistoryEntry = {
-      timestamp: codexLastRefreshTime,
-      session: latestUsageData?.five_hour?.utilization || 0,
-      weekly: latestUsageData?.seven_day?.utilization || 0,
-      sonnet: latestUsageData?.seven_day_sonnet?.utilization || 0,
-      opus: latestUsageData?.seven_day_opus?.utilization,
-      cowork: latestUsageData?.seven_day_cowork?.utilization,
-      oauthApps: latestUsageData?.seven_day_oauth_apps?.utilization,
-      codexSession: data.five_hour?.utilization,
-      codexWeekly: data.seven_day?.utilization,
-    }
-    await window.electronAPI.saveUsageHistoryEntry(codexHistoryEntry)
-
-    // Update tray with Codex stats included
-    if (latestUsageData) {
-      window.electronAPI.updateTrayUsage({
-        session: latestUsageData.five_hour?.utilization || 0,
-        weekly: latestUsageData.seven_day?.utilization || 0,
-        sonnet: latestUsageData.seven_day_sonnet?.utilization || 0,
-        codexSession: data.five_hour?.utilization,
-        codexWeekly: data.seven_day?.utilization,
-      })
-    }
-    if (isCodexGraphVisible) {
-      renderCodexUsageChart()
-    }
-    if (isCodexPieVisible) {
-      renderCodexPieChart()
-    }
-    resizeWidget()
-  } catch (error) {
-    const err = error as Error
-    if (err.message.includes('CodexSessionExpired') || err.message.includes('Missing Codex')) {
-      codexHasData = false
-      showCodexLogin()
-    } else {
-      // Try cached
-      const cached = await window.electronAPI.getCachedCodexUsage()
-      if (cached) {
-        latestCodexData = cached.data
-        showCodexContent()
-        updateCodexUI(cached.data)
-        startCodexCountdown()
-        codexLastRefreshTime = cached.timestamp
-        updateCodexStatusText()
-        startCodexStatusTimer()
-        if (isCodexGraphVisible) {
-          renderCodexUsageChart()
-        }
-        if (isCodexPieVisible) {
-          renderCodexPieChart()
-        }
-        resizeWidget()
-      } else {
-        codexHasData = false
-        showCodexLogin()
-        elements.codexLoginError.textContent = 'Failed to fetch. Try reconnecting.'
-      }
-    }
-  }
-}
-
-function updateCodexUI(data: CodexUsageData): void {
-  const sessionUtil = data.five_hour?.utilization ?? 0
-  const weeklyUtil = data.seven_day?.utilization ?? 0
-
-  updateProgressBar(elements.codexSessionProgress, elements.codexSessionPercentage, sessionUtil)
-  updateUsageRing(elements.codexSessionUsageRing, sessionUtil)
-  updateTimer(elements.codexSessionTimer, elements.codexSessionTimeText, data.five_hour?.resets_at ?? null, 5 * 60)
-
-  updateProgressBar(elements.codexWeeklyProgress, elements.codexWeeklyPercentage, weeklyUtil)
-  updateUsageRing(elements.codexWeeklyUsageRing, weeklyUtil)
-  updateTimer(elements.codexWeeklyTimer, elements.codexWeeklyTimeText, data.seven_day?.resets_at ?? null, 7 * 24 * 60)
-}
-
-function startCodexCountdown(): void {
-  stopCodexCountdown()
-  codexCountdownInterval = setInterval(() => {
-    if (latestCodexData) updateCodexUI(latestCodexData)
-  }, 1000)
-}
-
-function stopCodexCountdown(): void {
-  if (codexCountdownInterval) {
-    clearInterval(codexCountdownInterval)
-    codexCountdownInterval = null
-  }
-}
-
-async function handleCodexAutoDetect(): Promise<void> {
-  elements.codexAutoDetectBtn.disabled = true
-  elements.codexAutoDetectBtn.textContent = 'Detecting...'
-  elements.codexLoginError.textContent = ''
-
-  try {
-    const result = await window.electronAPI.detectCodexToken()
-    if (result.success && result.accessToken) {
-      await window.electronAPI.saveCodexCredentials({
-        accessToken: result.accessToken,
-        cookieName: result.cookieName,
-      })
-      await fetchCodexUsageData()
-    } else {
-      elements.codexLoginError.textContent = result.error || 'Detection failed'
-    }
-  } catch (err) {
-    elements.codexLoginError.textContent = (err as Error).message || 'Detection failed'
-  } finally {
-    elements.codexAutoDetectBtn.disabled = false
-    elements.codexAutoDetectBtn.textContent = 'Connect'
-  }
-}
-
-async function handleCodexManualToken(): Promise<void> {
-  const token = elements.codexTokenInput.value.trim()
-  if (!token) {
-    elements.codexTokenError.textContent = 'Please paste your Codex token'
-    return
-  }
-
-  elements.codexSaveBtn.disabled = true
-  elements.codexSaveBtn.textContent = '...'
-  elements.codexTokenError.textContent = ''
-
-  try {
-    await window.electronAPI.saveCodexCredentials({ accessToken: token })
-    elements.codexTokenInput.value = ''
-    await fetchCodexUsageData()
-    if (!codexHasData) {
-      elements.codexTokenError.textContent = 'Token saved but fetch failed. Check the token is valid.'
-    }
-  } catch {
-    elements.codexTokenError.textContent = 'Failed to connect. Check your token.'
-  } finally {
-    elements.codexSaveBtn.disabled = false
-    elements.codexSaveBtn.textContent = 'Save'
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Lightweight Canvas 2D usage history chart (no external dependencies)
-async function renderUsageChart(): Promise<void> {
-  try {
-    const { claudePrimary, claudeSecondary, claudeSecondaryLight } = getThemeColors()
-    const history = await window.electronAPI.getUsageHistory()
-
-    // Filter to last 7 days
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-    const recent = history.filter((e) => e.timestamp >= sevenDaysAgo)
-
-    // Group by hour for cleaner display
-    const hourlyData: Record<string, UsageHistoryEntry> = {}
-    for (const entry of recent) {
-      const date = new Date(entry.timestamp)
-      const hourKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`
-      if (!hourlyData[hourKey] || entry.timestamp > hourlyData[hourKey].timestamp) {
-        hourlyData[hourKey] = entry
-      }
-    }
-
-    const sortedKeys = Object.keys(hourlyData).sort()
-    const labels = sortedKeys.map((k) => {
-      const parts = k.split(' ')
-      const dateParts = parts[0].split('-')
-      return `${dateParts[1]}/${dateParts[2]} ${parts[1]}`
-    })
-    const sessionData = sortedKeys.map((k) => hourlyData[k].session)
-    const weeklyData = sortedKeys.map((k) => hourlyData[k].weekly)
-    const sonnetData = sortedKeys.map((k) => hourlyData[k].sonnet || 0)
-    const opusData = sortedKeys.map((k) => hourlyData[k].opus || 0)
-    const coworkData = sortedKeys.map((k) => hourlyData[k].cowork || 0)
-    const hasOpus = opusData.some((v) => v > 0)
-    const hasCowork = coworkData.some((v) => v > 0)
-
-    const canvas = elements.usageChart
-    const dpr = window.devicePixelRatio || 1
-    const rect = canvas.parentElement!.getBoundingClientRect()
-    const chartHeight = rect.height - 28
-    canvas.width = rect.width * dpr
-    canvas.height = chartHeight * dpr // account for padding + subtitle
-    canvas.style.width = rect.width + 'px'
-    canvas.style.height = chartHeight + 'px'
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.scale(dpr, dpr)
-
-    const w = rect.width
-    const h = chartHeight
-    const padLeft = 30
-    const padRight = 10
-    const padTop = 20
-    const padBottom = 20
-    const chartW = w - padLeft - padRight
-    const chartH = h - padTop - padBottom
-
-    // Clear
-    ctx.clearRect(0, 0, w, h)
-
-    // No data message
-    if (sortedKeys.length < 2) {
-      ctx.fillStyle = '#505050'
-      ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText('Usage history will appear after a few refreshes', w / 2, h / 2)
-      return
-    }
-
-    // Y-axis labels and grid
-    ctx.textAlign = 'right'
-    ctx.textBaseline = 'middle'
-    ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
-    for (let pct = 0; pct <= 100; pct += 25) {
-      const y = padTop + chartH - (pct / 100) * chartH
-      ctx.fillStyle = '#505050'
-      ctx.fillText(pct + '%', padLeft - 4, y)
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)'
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.moveTo(padLeft, y)
-      ctx.lineTo(padLeft + chartW, y)
-      ctx.stroke()
-    }
-
-    // X-axis labels (show ~6 labels)
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'top'
-    const labelStep = Math.max(1, Math.floor(sortedKeys.length / 6))
-    for (let i = 0; i < sortedKeys.length; i += labelStep) {
-      const x = padLeft + (i / (sortedKeys.length - 1)) * chartW
-      ctx.fillStyle = '#505050'
-      ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
-      ctx.fillText(labels[i], x, padTop + chartH + 4)
-    }
-
-    // Draw line helper
-    function drawLine(data: number[], color: string, fillColor: string): void {
-      if (data.length < 2) return
-      ctx!.beginPath()
-      for (let i = 0; i < data.length; i++) {
-        const x = padLeft + (i / (data.length - 1)) * chartW
-        const y = padTop + chartH - (data[i] / 100) * chartH
-        if (i === 0) ctx!.moveTo(x, y)
-        else ctx!.lineTo(x, y)
-      }
-      ctx!.strokeStyle = color
-      ctx!.lineWidth = 1.5
-      ctx!.stroke()
-
-      // Fill area
-      const lastX = padLeft + ((data.length - 1) / (data.length - 1)) * chartW
-      ctx!.lineTo(lastX, padTop + chartH)
-      ctx!.lineTo(padLeft, padTop + chartH)
-      ctx!.closePath()
-      ctx!.fillStyle = fillColor
-      ctx!.fill()
-    }
-
-    drawLine(sessionData, claudePrimary, hexToRgba(claudePrimary, 0.1))
-    drawLine(weeklyData, claudeSecondary, hexToRgba(claudeSecondary, 0.08))
-    drawLine(sonnetData, claudePrimary, hexToRgba(claudePrimary, 0.06))
-    if (hasOpus) drawLine(opusData, '#f59e0b', 'rgba(245, 158, 11, 0.06)')
-    if (hasCowork) drawLine(coworkData, '#10b981', 'rgba(16, 185, 129, 0.06)')
-
-    // Legend — dynamic based on available series
-    interface LegendItem {
-      label: string
-      color: string
-    }
-    const legendItems: LegendItem[] = [
-      { label: 'Session', color: claudePrimary },
-      { label: 'Weekly', color: claudeSecondaryLight || claudeSecondary },
-      { label: 'Sonnet', color: claudePrimary },
-    ]
-    if (hasOpus) legendItems.push({ label: 'Opus', color: '#f59e0b' })
-    if (hasCowork) legendItems.push({ label: 'Cowork', color: '#10b981' })
-
-    const legendY = 6
-    ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif'
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'middle'
-    let legendX = padLeft
-    for (const item of legendItems) {
-      ctx.fillStyle = item.color
-      ctx.fillRect(legendX, legendY - 3, 10, 6)
-      ctx.fillStyle = '#a0a0a0'
-      ctx.fillText(item.label, legendX + 14, legendY)
-      legendX += 54
-    }
-  } catch (error) {
-    debugLog('Chart rendering failed:', error)
-  }
-}
-
-// Two-ring donut chart:
-//   Outer ring = weekly model proportional split (Sonnet, Opus, etc.)
-//              = dim placeholder when no per-model data available
-//   Inner ring = session utilisation arc (used vs remaining)
-//   Centre     = session % label
-function renderPieChart(): void {
-  if (!latestUsageData) return
-  const { claudePrimary } = getThemeColors()
-
-  const canvas = elements.pieChart
-  const dpr = window.devicePixelRatio || 1
-  const rect = canvas.parentElement!.getBoundingClientRect()
-  const chartHeight = rect.height - 28
-  canvas.width = rect.width * dpr
-  canvas.height = chartHeight * dpr
-  canvas.style.width = rect.width + 'px'
-  canvas.style.height = chartHeight + 'px'
-
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  ctx.scale(dpr, dpr)
-
-  const w = rect.width
-  const h = chartHeight
-
-  ctx.clearRect(0, 0, w, h)
-
-  interface PieSlice {
-    label: string
-    value: number // 0-100 utilization %
-    color: string
-  }
-
-  // Outer ring: per-model weekly slices, sized by proportional share.
-  // Future model keys (e.g. seven_day_haiku) surface automatically via the index signature.
-  const MODEL_COLORS: Record<string, string> = {
-    seven_day_sonnet:     claudePrimary,
-    seven_day_opus:       '#f59e0b',
-    seven_day_cowork:     '#10b981',
-    seven_day_oauth_apps: '#06b6d4',
-  }
-  const MODEL_LABELS: Record<string, string> = {
-    seven_day_sonnet:     'Sonnet',
-    seven_day_opus:       'Opus',
-    seven_day_cowork:     'Cowork',
-    seven_day_oauth_apps: 'OAuth',
-  }
-
-  const outerSlices: PieSlice[] = Object.entries(latestUsageData)
-    .filter(([key, val]) => key.startsWith('seven_day_') && (val as UsageTimePeriod)?.utilization != null)
-    .map(([key, val]) => ({
-      label: MODEL_LABELS[key] ?? key.replace('seven_day_', '').replace(/_/g, ' '),
-      value: (val as UsageTimePeriod).utilization!,
-      color: MODEL_COLORS[key] ?? '#a0a0a0',
-    }))
-    .filter((s) => s.value > 0)
-
-  const sessionPct = latestUsageData.five_hour?.utilization || 0
-  const weeklyPct  = latestUsageData.seven_day?.utilization  || 0
-  const hasModels  = outerSlices.length > 0
-  const hasData    = hasModels || sessionPct > 0 || weeklyPct > 0
-
-  if (!hasData) {
-    ctx.fillStyle = '#505050'
-    ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('No data available', w / 2, h / 2)
-    return
-  }
-
-  // Geometry — donut center shifted left to leave room for right-side legend
-  const legendColW  = 96
-  const maxR        = Math.min((w - legendColW) / 2, h / 2) * 0.88
-  const ringW       = maxR * 0.28          // thickness of each ring
-  const ringGap     = maxR * 0.07          // gap between outer and inner rings
-  const outerOuter  = maxR
-  const outerInner  = maxR - ringW
-  const innerOuter  = outerInner - ringGap
-  const innerInner  = innerOuter - ringW
-  const cx  = (w - legendColW) / 2
-  const cy  = h / 2
-  const TAU = 2 * Math.PI
-  const START     = -Math.PI / 2          // 12 o'clock
-  const OUTER_GAP = hasModels && outerSlices.length > 1 ? 0.025 : 0
-
-  // Helper: filled donut arc segment
-  function drawArc(ro: number, ri: number, a0: number, a1: number, color: string): void {
-    ctx!.beginPath()
-    ctx!.arc(cx, cy, ro, a0, a1)
-    ctx!.arc(cx, cy, ri, a1, a0, true)
-    ctx!.closePath()
-    ctx!.fillStyle = color
-    ctx!.fill()
-  }
-
-  // --- Outer ring: weekly model breakdown ---
-  if (hasModels) {
-    const total = outerSlices.reduce((sum, s) => sum + s.value, 0)
-    let angle = START
-    for (const slice of outerSlices) {
-      const sweep = (slice.value / total) * TAU - OUTER_GAP
-      drawArc(outerOuter, outerInner, angle + OUTER_GAP / 2, angle + sweep + OUTER_GAP / 2, slice.color)
-      angle += (slice.value / total) * TAU
-    }
-  } else {
-    // No per-model data yet — dim placeholder full ring
-    drawArc(outerOuter, outerInner, START, START + TAU, 'rgba(255,255,255,0.06)')
-  }
-
-  // --- Inner ring: session utilisation arc ---
-  const usedAngle = (Math.min(sessionPct, 100) / 100) * TAU
-  // Used portion (purple)
-  if (usedAngle > 0.01) {
-    drawArc(innerOuter, innerInner, START, START + usedAngle, claudePrimary)
-  }
-  // Remaining portion (dim)
-  if (usedAngle < TAU - 0.01) {
-    drawArc(innerOuter, innerInner, START + usedAngle, START + TAU, hexToRgba(claudePrimary, 0.14))
-  }
-
-  // --- Centre label: session % ---
-  const labelSize = Math.max(8, Math.round(innerInner * 0.42))
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.font = `bold ${labelSize}px -apple-system, BlinkMacSystemFont, sans-serif`
-  ctx.fillStyle = '#c0c0c0'
-  ctx.fillText(`${Math.round(sessionPct)}%`, cx, cy)
-
-  // --- Right-side legend ---
-  const legendX    = cx + outerOuter + 14
-  const itemH      = 16
-  const headerH    = 12
-
-  // Calculate total legend height to vertically centre it
-  const modelRows  = hasModels ? outerSlices.length : 1   // 1 for "No model data" placeholder
-  const totalH     = headerH + modelRows * itemH + 8 + headerH + itemH
-  let ly = cy - totalH / 2
-
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'middle'
-
-  function legendHeader(text: string): void {
-    ctx!.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
-    ctx!.fillStyle = '#808080'
-    ctx!.fillText(text, legendX, ly + headerH / 2)
-    ly += headerH
-  }
-
-  function legendRow(color: string, label: string, sub: string): void {
-    ctx!.fillStyle = color
-    ctx!.fillRect(legendX, ly + itemH / 2 - 3, 8, 6)
-    ctx!.font = '9px -apple-system, BlinkMacSystemFont, sans-serif'
-    ctx!.fillStyle = '#c0c0c0'
-    ctx!.fillText(label, legendX + 12, ly + itemH / 2 - 3)
-    ctx!.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
-    ctx!.fillStyle = '#606060'
-    ctx!.fillText(sub, legendX + 12, ly + itemH / 2 + 5)
-    ly += itemH
-  }
-
-  // Weekly models section
-  legendHeader('WEEKLY MODELS')
-  if (hasModels) {
-    const total = outerSlices.reduce((sum, s) => sum + s.value, 0)
-    for (const s of outerSlices) {
-      legendRow(s.color, s.label, `${Math.round(s.value)}% · ${Math.round((s.value / total) * 100)}% share`)
-    }
-  } else {
-    ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
-    ctx.fillStyle = '#404040'
-    ctx.fillText('No model data from API', legendX, ly + itemH / 2)
-    ly += itemH
-  }
-
-  // Session section
-  ly += 8
-  legendHeader('SESSION')
-  legendRow(claudePrimary, `${Math.round(sessionPct)}% used`, `of 5h window`)
-}
-
-async function renderCodexUsageChart(): Promise<void> {
-  try {
-    const { codexPrimary, codexSecondary } = getThemeColors()
-    const history = await window.electronAPI.getUsageHistory()
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-    const recent = history.filter((e) => e.timestamp >= sevenDaysAgo && (e.codexSession != null || e.codexWeekly != null))
-
-    const hourlyData: Record<string, UsageHistoryEntry> = {}
-    for (const entry of recent) {
-      const date = new Date(entry.timestamp)
-      const hourKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`
-      if (!hourlyData[hourKey] || entry.timestamp > hourlyData[hourKey].timestamp) {
-        hourlyData[hourKey] = entry
-      }
-    }
-
-    const sortedKeys = Object.keys(hourlyData).sort()
-    const sessionData = sortedKeys.map((k) => hourlyData[k].codexSession ?? 0)
-    const weeklyData = sortedKeys.map((k) => hourlyData[k].codexWeekly ?? 0)
-    const labels = sortedKeys.map((k) => {
-      const parts = k.split(' ')
-      const dateParts = parts[0].split('-')
-      return `${dateParts[1]}/${dateParts[2]} ${parts[1]}`
-    })
-
-    const canvas = elements.codexUsageChart
-    const dpr = window.devicePixelRatio || 1
-    const rect = canvas.parentElement!.getBoundingClientRect()
-    const chartHeight = rect.height - 28
-    canvas.width = rect.width * dpr
-    canvas.height = chartHeight * dpr
-    canvas.style.width = rect.width + 'px'
-    canvas.style.height = chartHeight + 'px'
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.scale(dpr, dpr)
-
-    const w = rect.width
-    const h = chartHeight
-    const padLeft = 30
-    const padRight = 10
-    const padTop = 20
-    const padBottom = 20
-    const chartW = w - padLeft - padRight
-    const chartH = h - padTop - padBottom
-
-    ctx.clearRect(0, 0, w, h)
-
-    if (sortedKeys.length < 2) {
-      ctx.fillStyle = '#505050'
-      ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText('Codex history will appear after a few refreshes', w / 2, h / 2)
-      return
-    }
-
-    ctx.textAlign = 'right'
-    ctx.textBaseline = 'middle'
-    ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
-    for (let pct = 0; pct <= 100; pct += 25) {
-      const y = padTop + chartH - (pct / 100) * chartH
-      ctx.fillStyle = '#505050'
-      ctx.fillText(pct + '%', padLeft - 4, y)
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)'
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.moveTo(padLeft, y)
-      ctx.lineTo(padLeft + chartW, y)
-      ctx.stroke()
-    }
-
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'top'
-    const labelStep = Math.max(1, Math.floor(sortedKeys.length / 6))
-    for (let i = 0; i < sortedKeys.length; i += labelStep) {
-      const x = padLeft + (i / (sortedKeys.length - 1)) * chartW
-      ctx.fillStyle = '#505050'
-      ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
-      ctx.fillText(labels[i], x, padTop + chartH + 4)
-    }
-
-    function drawLine(data: number[], color: string, fillColor: string): void {
-      if (data.length < 2) return
-      ctx!.beginPath()
-      for (let i = 0; i < data.length; i++) {
-        const x = padLeft + (i / (data.length - 1)) * chartW
-        const y = padTop + chartH - (data[i] / 100) * chartH
-        if (i === 0) ctx!.moveTo(x, y)
-        else ctx!.lineTo(x, y)
-      }
-      ctx!.strokeStyle = color
-      ctx!.lineWidth = 1.5
-      ctx!.stroke()
-      ctx!.lineTo(padLeft + chartW, padTop + chartH)
-      ctx!.lineTo(padLeft, padTop + chartH)
-      ctx!.closePath()
-      ctx!.fillStyle = fillColor
-      ctx!.fill()
-    }
-
-    drawLine(sessionData, codexPrimary, hexToRgba(codexPrimary, 0.12))
-    drawLine(weeklyData, codexSecondary, hexToRgba(codexSecondary, 0.09))
-
-    const legendY = 6
-    ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif'
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'middle'
-    ctx.fillStyle = codexPrimary
-    ctx.fillRect(padLeft, legendY - 3, 10, 6)
-    ctx.fillStyle = '#a0a0a0'
-    ctx.fillText('Session', padLeft + 14, legendY)
-    ctx.fillStyle = codexSecondary
-    ctx.fillRect(padLeft + 72, legendY - 3, 10, 6)
-    ctx.fillStyle = '#a0a0a0'
-    ctx.fillText('Weekly', padLeft + 86, legendY)
-  } catch (error) {
-    debugLog('Codex chart rendering failed:', error)
-  }
-}
-
-function renderCodexPieChart(): void {
-  if (!latestCodexData) return
-  const { codexPrimary, codexSecondary } = getThemeColors()
-
-  const sessionPct = latestCodexData.five_hour?.utilization ?? 0
-  const weeklyPct = latestCodexData.seven_day?.utilization ?? 0
-
-  const canvas = elements.codexPieChart
-  const dpr = window.devicePixelRatio || 1
-  const rect = canvas.parentElement!.getBoundingClientRect()
-  const chartHeight = rect.height - 28
-  canvas.width = rect.width * dpr
-  canvas.height = chartHeight * dpr
-  canvas.style.width = rect.width + 'px'
-  canvas.style.height = chartHeight + 'px'
-
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  ctx.scale(dpr, dpr)
-
-  const w = rect.width
-  const h = chartHeight
-  ctx.clearRect(0, 0, w, h)
-
-  const cx = w * 0.36
-  const cy = h / 2
-  const outerRadius = Math.min(w, h) * 0.32
-  const outerWidth = outerRadius * 0.3
-  const innerRadius = outerRadius * 0.6
-  const innerWidth = outerRadius * 0.3
-  const start = -Math.PI / 2
-  const tau = 2 * Math.PI
-
-  function drawRing(radius: number, width: number, value: number, usedColor: string, remainColor: string): void {
-    const pct = Math.max(0, Math.min(100, value))
-    ctx!.beginPath()
-    ctx!.arc(cx, cy, radius, start, start + tau, false)
-    ctx!.lineWidth = width
-    ctx!.strokeStyle = remainColor
-    ctx!.stroke()
-    ctx!.beginPath()
-    ctx!.arc(cx, cy, radius, start, start + (pct / 100) * tau, false)
-    ctx!.lineWidth = width
-    ctx!.strokeStyle = usedColor
-    ctx!.stroke()
-  }
-
-  drawRing(outerRadius, outerWidth, weeklyPct, codexSecondary, hexToRgba(codexSecondary, 0.16))
-  drawRing(innerRadius, innerWidth, sessionPct, codexPrimary, hexToRgba(codexPrimary, 0.16))
-
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, sans-serif'
-  ctx.fillStyle = '#c0c0c0'
-  ctx.fillText(`${Math.round(sessionPct)}%`, cx, cy)
-  ctx.font = '8px -apple-system, BlinkMacSystemFont, sans-serif'
-  ctx.fillStyle = '#707070'
-  ctx.fillText('session used', cx, cy + 14)
-
-  const legendX = w * 0.68
-  const baseY = cy - 20
-  ctx.textAlign = 'left'
-  ctx.fillStyle = codexSecondary
-  ctx.fillRect(legendX, baseY, 8, 8)
-  ctx.fillStyle = '#c0c0c0'
-  ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif'
-  ctx.fillText(`Weekly: ${Math.round(weeklyPct)}% used`, legendX + 12, baseY + 4)
-  ctx.fillStyle = codexPrimary
-  ctx.fillRect(legendX, baseY + 18, 8, 8)
-  ctx.fillStyle = '#c0c0c0'
-  ctx.fillText(`Session: ${Math.round(sessionPct)}% used`, legendX + 12, baseY + 22)
-}
-
 // Add spinning animation for refresh button
 const style = document.createElement('style')
 style.textContent = `
@@ -1985,10 +339,9 @@ init()
 
 // Cleanup on unload
 window.addEventListener('beforeunload', () => {
+  claudeProvider.destroy()
   stopAutoUpdate()
-  stopOfflineRetry()
-  stopCodexCountdown()
-  stopCodexStatusTimer()
-  if (countdownInterval) clearInterval(countdownInterval)
-  if (statusInterval) clearInterval(statusInterval)
+  codexProvider.destroy()
+  // copilotProvider.destroy()
+  geminiProvider.destroy()
 })
