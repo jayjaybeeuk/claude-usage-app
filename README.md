@@ -21,9 +21,34 @@ A beautiful, standalone Windows, Mac and Linux desktop app that displays your Cl
 
 ### Download Pre-built Release
 
-1. Download the latest `Agent-Usage-App-Setup.exe` from [Releases](https://github.com/jayjaybeeuk/claude-usage-app/releases)
+Download the latest release from [Releases](https://github.com/jayjaybeeuk/claude-usage-app/releases).
+
+#### Windows
+
+1. Download `Agent-Usage-App-Setup.exe`
 2. Run the installer
 3. Launch "Agent Usage Widget" from Start Menu
+
+#### macOS
+
+1. Download the `.dmg` file for your architecture:
+   - `Agent.Usage-x.x.x.dmg` — Intel Macs (x64)
+   - `Agent.Usage-x.x.x-arm64.dmg` — Apple Silicon (arm64, recommended)
+2. Open the `.dmg` file
+3. Drag **Agent Usage** to your Applications folder
+4. Remove the quarantine attribute (required because the app is unsigned):
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Agent\ Usage.app
+   ```
+5. Run the app
+
+> **Note:** The quarantine step is an Apple security measure for unsigned apps. The app is 100% safe — you can verify by reviewing the source code in this repository.
+
+#### Linux
+
+1. Download the `.AppImage` file from Releases
+2. Make it executable: `chmod +x Agent.Usage-x.x.x.AppImage`
+3. Run the AppImage
 
 ### Build from Source
 
