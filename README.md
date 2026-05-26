@@ -31,10 +31,8 @@ Download the latest release from [Releases](https://github.com/jayjaybeeuk/claud
 
 #### macOS
 
-1. Download the `.dmg` file for your architecture:
-   - `Agent.Usage-x.x.x.dmg` — Intel Macs (x64)
-   - `Agent.Usage-x.x.x-arm64.dmg` — Apple Silicon (arm64, recommended)
-2. Open the `.dmg` file
+1. Download the macOS `.dmg` file from [Releases](https://github.com/jayjaybeeuk/claude-usage-app/releases)
+2. Open the downloaded `.dmg` file
 3. Drag **Agent Usage** to your Applications folder
 4. Remove the quarantine attribute (required because the app is unsigned):
    ```bash
