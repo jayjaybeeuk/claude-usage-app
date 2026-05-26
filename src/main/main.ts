@@ -317,7 +317,7 @@ function updateTrayDisplay(): void {
   if (!tray) return
 
   if (isMac && latestTrayStats) {
-    const claudePct = `${Math.round(latestTrayStats.weekly)}%`
+    const claudePct = `${Math.round(latestTrayStats.session)}%`
     const hasCodex =
       latestTrayStats.codexSession !== undefined || latestTrayStats.codexWeekly !== undefined
     const codexPct =
