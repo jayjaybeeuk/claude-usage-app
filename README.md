@@ -40,7 +40,7 @@ Download the latest release from [Releases](https://github.com/jayjaybeeuk/claud
    ```
 5. Run the app
 
-> **Note:** The quarantine step is an Apple security measure for unsigned apps. The app is 100% safe — you can verify by reviewing the source code in this repository.
+> **Note:** The quarantine step is an Apple security measure for unsigned apps. This project is open source, so you can review the source code in this repository or build the app from source yourself.
 
 #### Linux
 
