@@ -25,7 +25,7 @@ Download the latest release from [Releases](https://github.com/jayjaybeeuk/claud
 
 #### Windows
 
-1. Download `Agent-Usage-App-Setup.exe`
+1. Download the Windows `*Setup*.exe` installer from Releases
 2. Run the installer
 3. Launch "Agent Usage Widget" from Start Menu
 
