@@ -45,8 +45,8 @@ Download the latest release from [Releases](https://github.com/jayjaybeeuk/claud
 #### Linux
 
 1. Download the `.AppImage` file from Releases
-2. Make it executable: `chmod +x Agent.Usage-x.x.x.AppImage`
-3. Run the AppImage
+2. Make it executable: `chmod +x *.AppImage`
+3. Run it from the download directory: `./<downloaded-file>.AppImage`
 
 ### Build from Source
 
