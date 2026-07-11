@@ -38,12 +38,20 @@ export interface DetectSessionResult {
   error?: string
 }
 
+export interface TrayOrgUsage {
+  name?: string | null
+  session: number
+  weekly: number
+}
+
 export interface TrayUsageStats {
   session: number
   weekly: number
   sonnet: number
   codexSession?: number
   codexWeekly?: number
+  /** Additional Claude organizations beyond the primary one */
+  orgs?: TrayOrgUsage[]
 }
 
 export interface UsageHistoryEntry {

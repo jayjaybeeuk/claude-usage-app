@@ -105,7 +105,10 @@ org and a separate team org), the widget shows them all:
   Its section header shows the org name.
 - Each **additional org** gets a compact section below with its own name,
   Current Session and Weekly Limit bars, and countdown timers.
-- The tray title and usage history track the primary org.
+- The **menu bar / tray** shows every org too: the title reads e.g.
+  `42% ·12% ✦33%` (primary org · each additional org · Codex), and the tray
+  menu lists each org by name with its session and weekly percentages.
+- Usage history tracks the primary org.
 
 No extra setup is needed — the org list is detected from your existing login
 (including logins made before this feature existed). If an additional org's

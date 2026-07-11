@@ -230,6 +230,24 @@ async function refreshAllUsageData(): Promise<void> {
   await fetchCodexUsageData()
 }
 
+// Push the tray stats built from the latest known data (primary org,
+// additional orgs, and Codex when available).
+function pushTrayUsage(): void {
+  if (!latestUsageData) return
+  window.electronAPI.updateTrayUsage({
+    session: latestUsageData.five_hour?.utilization || 0,
+    weekly: latestUsageData.seven_day?.utilization || 0,
+    sonnet: latestUsageData.seven_day_sonnet?.utilization || 0,
+    codexSession: latestCodexData?.five_hour?.utilization,
+    codexWeekly: latestCodexData?.seven_day?.utilization,
+    orgs: extraOrgs.map(({ org, data }) => ({
+      name: org.name ?? null,
+      session: data.five_hour?.utilization || 0,
+      weekly: data.seven_day?.utilization || 0,
+    })),
+  })
+}
+
 // ─── Additional Claude organizations ─────────────────────────────────────────
 
 async function fetchExtraOrgsUsage(): Promise<void> {
@@ -267,6 +285,7 @@ async function fetchExtraOrgsUsage(): Promise<void> {
     )
     extraOrgs = results.filter((entry): entry is { org: OrganizationInfo; data: UsageData } => entry !== null)
     renderExtraOrgSections()
+    pushTrayUsage()
     resizeWidget()
   } catch (error) {
     // Non-fatal: the primary section is unaffected by multi-org failures.
@@ -808,14 +827,8 @@ async function fetchUsageData(): Promise<void> {
     }
     await window.electronAPI.saveUsageHistoryEntry(historyEntry)
 
-    // Update tray with latest stats (include Codex if available)
-    window.electronAPI.updateTrayUsage({
-      session: historyEntry.session,
-      weekly: historyEntry.weekly,
-      sonnet: historyEntry.sonnet,
-      codexSession: latestCodexData?.five_hour?.utilization,
-      codexWeekly: latestCodexData?.seven_day?.utilization,
-    })
+    // Update tray with latest stats (includes additional orgs and Codex)
+    pushTrayUsage()
 
     // Refresh graph if visible
     if (isGraphVisible) {
@@ -1439,15 +1452,7 @@ async function fetchCodexUsageData(): Promise<void> {
     await window.electronAPI.saveUsageHistoryEntry(codexHistoryEntry)
 
     // Update tray with Codex stats included
-    if (latestUsageData) {
-      window.electronAPI.updateTrayUsage({
-        session: latestUsageData.five_hour?.utilization || 0,
-        weekly: latestUsageData.seven_day?.utilization || 0,
-        sonnet: latestUsageData.seven_day_sonnet?.utilization || 0,
-        codexSession: data.five_hour?.utilization,
-        codexWeekly: data.seven_day?.utilization,
-      })
-    }
+    pushTrayUsage()
     if (isCodexGraphVisible) {
       renderCodexUsageChart()
     }

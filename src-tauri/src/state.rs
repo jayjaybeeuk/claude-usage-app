@@ -17,6 +17,18 @@ pub struct TrayStats {
     pub codex_session: Option<f64>,
     #[serde(default)]
     pub codex_weekly: Option<f64>,
+    /// Additional Claude organizations beyond the primary one.
+    #[serde(default)]
+    pub orgs: Vec<TrayOrgStats>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrayOrgStats {
+    #[serde(default)]
+    pub name: Option<String>,
+    pub session: f64,
+    pub weekly: f64,
 }
 
 #[derive(Default)]

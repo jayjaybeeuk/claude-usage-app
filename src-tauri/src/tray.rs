@@ -43,6 +43,30 @@ fn build_menu(app: &AppHandle, stats: Option<&TrayStats>) -> tauri::Result<Menu<
                 None::<&str>,
             )?)?;
         }
+        for (i, org) in s.orgs.iter().enumerate() {
+            menu.append(&PredefinedMenuItem::separator(app)?)?;
+            menu.append(&MenuItem::with_id(
+                app,
+                format!("hdr-org-{i}"),
+                org.name.as_deref().unwrap_or("Claude Org"),
+                false,
+                None::<&str>,
+            )?)?;
+            menu.append(&MenuItem::with_id(
+                app,
+                format!("stat-org-{i}-session"),
+                format!("  Session:  {}%", org.session.round() as i64),
+                false,
+                None::<&str>,
+            )?)?;
+            menu.append(&MenuItem::with_id(
+                app,
+                format!("stat-org-{i}-weekly"),
+                format!("  Weekly:   {}%", org.weekly.round() as i64),
+                false,
+                None::<&str>,
+            )?)?;
+        }
         if s.codex_session.is_some() || s.codex_weekly.is_some() {
             menu.append(&PredefinedMenuItem::separator(app)?)?;
             menu.append(&MenuItem::with_id(app, "hdr-codex", "Codex", false, None::<&str>)?)?;
@@ -150,12 +174,7 @@ pub fn update_tray(app: &AppHandle) {
     {
         match &stats {
             Some(s) => {
-                let claude_pct = format!("{}%", s.session.round() as i64);
-                let codex_pct = s
-                    .codex_session
-                    .map(|cs| format!(" ✦{}%", cs.round() as i64))
-                    .unwrap_or_default();
-                let _ = tray.set_title(Some(format!("{claude_pct}{codex_pct}")));
+                let _ = tray.set_title(Some(format_tray_title(s)));
             }
             None => {
                 let _ = tray.set_title(None::<&str>);
@@ -169,20 +188,84 @@ pub fn update_tray(app: &AppHandle) {
 
     match &stats {
         Some(s) => {
-            let codex_info = s
-                .codex_session
-                .map(|cs| format!(" | Codex Session: {}%", cs.round() as i64))
-                .unwrap_or_default();
-            let _ = tray.set_tooltip(Some(format!(
-                "Agent Usage — Claude Session: {}% | Weekly: {}%{}",
+            let mut tooltip = format!(
+                "Agent Usage — Claude Session: {}% | Weekly: {}%",
                 s.session.round() as i64,
                 s.weekly.round() as i64,
-                codex_info
-            )));
+            );
+            for org in &s.orgs {
+                tooltip.push_str(&format!(
+                    " | {}: {}%",
+                    org.name.as_deref().unwrap_or("Claude Org"),
+                    org.session.round() as i64
+                ));
+            }
+            if let Some(cs) = s.codex_session {
+                tooltip.push_str(&format!(" | Codex Session: {}%", cs.round() as i64));
+            }
+            let _ = tray.set_tooltip(Some(tooltip));
         }
         None => {
             let _ = tray.set_tooltip(Some("Agent Usage"));
         }
+    }
+}
+
+/// Menu-bar title: primary org session, then each additional org's session
+/// (`·`-prefixed), then Codex (`✦`-prefixed). Example: "42% ·12% ✦33%".
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn format_tray_title(s: &TrayStats) -> String {
+    let mut title = format!("{}%", s.session.round() as i64);
+    for org in &s.orgs {
+        title.push_str(&format!(" ·{}%", org.session.round() as i64));
+    }
+    if let Some(cs) = s.codex_session {
+        title.push_str(&format!(" ✦{}%", cs.round() as i64));
+    }
+    title
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn stats(value: serde_json::Value) -> TrayStats {
+        serde_json::from_value(value).expect("valid tray stats payload")
+    }
+
+    #[test]
+    fn deserializes_renderer_payload_with_and_without_orgs() {
+        let s = stats(json!({ "session": 42.4, "weekly": 80.0, "sonnet": 0 }));
+        assert!(s.orgs.is_empty());
+        assert_eq!(s.codex_session, None);
+
+        let s = stats(json!({
+            "session": 42.4, "weekly": 80.0, "sonnet": 5,
+            "codexSession": 33.0, "codexWeekly": 55.0,
+            "orgs": [{ "name": "Team Org", "session": 12.4, "weekly": 93.0 }, { "session": 7.0, "weekly": 8.0 }]
+        }));
+        assert_eq!(s.orgs.len(), 2);
+        assert_eq!(s.orgs[0].name.as_deref(), Some("Team Org"));
+        assert_eq!(s.orgs[1].name, None);
+    }
+
+    #[test]
+    fn formats_title_for_primary_orgs_and_codex() {
+        let s = stats(json!({ "session": 42.4, "weekly": 80.0 }));
+        assert_eq!(format_tray_title(&s), "42%");
+
+        let s = stats(json!({
+            "session": 42.4, "weekly": 80.0,
+            "orgs": [{ "name": "Team", "session": 12.4, "weekly": 93.0 }]
+        }));
+        assert_eq!(format_tray_title(&s), "42% ·12%");
+
+        let s = stats(json!({
+            "session": 42.4, "weekly": 80.0, "codexSession": 33.0,
+            "orgs": [{ "session": 12.4, "weekly": 93.0 }]
+        }));
+        assert_eq!(format_tray_title(&s), "42% ·12% ✦33%");
     }
 }
 

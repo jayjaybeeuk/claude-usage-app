@@ -39,6 +39,15 @@ describe('additional Claude organizations', () => {
     expect(timers[0].textContent).not.toBe('--:--')
   })
 
+  it('includes additional orgs in tray usage updates', async () => {
+    const b = await bootTwoOrgs()
+    await flush(60)
+    const trayCalls = b.callsFor('update_tray_usage') as Array<{ stats: Record<string, unknown> }>
+    const last = trayCalls[trayCalls.length - 1].stats
+    expect(last.session).toBe(42)
+    expect(last.orgs).toEqual([{ name: 'Team Org', session: 12, weekly: 93 }])
+  })
+
   it('labels the primary section with its org name when several orgs exist', async () => {
     await bootTwoOrgs()
     await flush(60)
