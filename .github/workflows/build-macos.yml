@@ -18,25 +18,40 @@ jobs:
         with:
           node-version: "22.12"
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Electron app (DMG + ZIP)
-        run: npm run package:mac
+      - name: Build Tauri app (app bundle + DMG)
+        # CI=true on runners makes the DMG bundler skip the Finder-scripted
+        # window styling, which needs GUI Automation permission.
+        run: npx tauri build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Zip app bundle
+        run: |
+          ditto -c -k --keepParent \
+            "src-tauri/target/release/bundle/macos/Agent Usage.app" \
+            "src-tauri/target/release/bundle/macos/Agent-Usage_aarch64_macos.zip"
 
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
           name: Claude-Usage-App-DMG
-          path: dist/*.dmg
+          path: src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
       - name: Upload ZIP
         uses: actions/upload-artifact@v4
         with:
           name: Claude-Usage-App-macOS-ZIP
-          path: dist/*.zip
+          path: src-tauri/target/release/bundle/macos/*.zip
           if-no-files-found: error

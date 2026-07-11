@@ -18,11 +18,33 @@ jobs:
         with:
           node-version: "22.12"
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Electron app (AppImage)
-        run: npm run package:linux
+      - name: Build Tauri app (AppImage + deb)
+        run: npx tauri build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -30,5 +52,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Claude-Usage-App-AppImage
-          path: dist/*.AppImage
+          path: src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
+      - name: Upload deb package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Claude-Usage-App-Deb
+          path: src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: error

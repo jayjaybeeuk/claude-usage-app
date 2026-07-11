@@ -18,24 +18,36 @@ jobs:
         with:
           node-version: "22.12"
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Electron app (Setup + Portable)
-        run: npm run package:win
+      - name: Build Tauri app (NSIS installer)
+        run: npx tauri build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stage portable executable
+        shell: bash
+        run: cp "src-tauri/target/release/agent-usage.exe" "src-tauri/target/release/Agent-Usage_x64-portable.exe"
 
       - name: Upload Setup installer
         uses: actions/upload-artifact@v4
         with:
           name: Claude-Usage-App-Setup
-          path: dist/*Setup*.exe
+          path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
       - name: Upload Portable executable
         uses: actions/upload-artifact@v4
         with:
           name: Claude-Usage-App-Portable
-          path: dist/*portable*.exe
+          path: src-tauri/target/release/*-portable.exe
           if-no-files-found: error
