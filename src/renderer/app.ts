@@ -1,3 +1,4 @@
+import './tauri-api' // installs window.electronAPI — must stay the first import
 import './styles.css'
 import { DEFAULT_REFRESH_MINUTES, MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES } from '../shared/refresh-interval'
 import type { Credentials, UsageData, UsageTimePeriod, ExtraUsage, UsageHistoryEntry, CodexUsageData } from '../shared/ipc-types'

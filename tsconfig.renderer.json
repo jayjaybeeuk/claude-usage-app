@@ -15,7 +15,7 @@
     "sourceMap": true,
     "composite": true,
     "tsBuildInfoFile": "./dist-renderer/.tsbuildinfo",
-    "types": ["vite/client"]
+    "types": ["vite/client", "node"]
   },
   "include": [
     "src/renderer/**/*.ts",

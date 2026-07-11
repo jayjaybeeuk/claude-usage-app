@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-refresh-interval"
+description = "Enables the get_refresh_interval command without any pre-configured scope."
+commands.allow = ["get_refresh_interval"]
+
+[[permission]]
+identifier = "deny-get-refresh-interval"
+description = "Denies the get_refresh_interval command without any pre-configured scope."
+commands.deny = ["get_refresh_interval"]

@@ -44,3 +44,10 @@ yarn-error.log*
 
 # Serena
 .serena/
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Test coverage
+coverage/

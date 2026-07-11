@@ -1,34 +1,30 @@
 {
   "name": "agent-usage",
-  "version": "1.4.3",
+  "version": "2.0.0",
   "description": "Desktop widget for agent usage monitoring",
-  "main": "dist-main/main/main.js",
   "scripts": {
-    "dev": "concurrently -n tsc,vite,electron -c blue,green,yellow \"npm run dev:main\" \"npm run dev:renderer\" \"npm run dev:electron\"",
-    "dev:main": "tsc -p tsconfig.main.json --watch",
+    "dev": "tauri dev",
+    "dev:debug": "DEBUG_LOG=1 tauri dev",
     "dev:renderer": "vite",
-    "dev:electron": "wait-on http://localhost:5173 && wait-on dist-main/main/main.js && cross-env NODE_ENV=development electron .",
-    "dev:debug": "concurrently -n tsc,vite,electron -c blue,green,yellow \"npm run dev:main\" \"npm run dev:renderer\" \"npm run dev:debug:electron\"",
-    "dev:debug:electron": "wait-on http://localhost:5173 && wait-on dist-main/main/main.js && cross-env DEBUG_LOG=1 NODE_ENV=development electron .",
-    "clean": "rm -rf dist-main dist-renderer",
-    "build": "npm run clean && npm run build:ts && npm run build:renderer",
-    "build:ts": "tsc -p tsconfig.main.json",
+    "clean": "rm -rf dist-renderer",
+    "build": "npm run build:renderer",
     "build:renderer": "vite build",
-    "start": "electron .",
-    "start:debug": "cross-env DEBUG_LOG=1 electron .",
-    "start:debug:dev": "npm run dev:debug",
-    "package": "npm run build && electron-builder",
-    "package:win": "npm run build && electron-builder --win",
-    "package:mac": "npm run build && electron-builder --mac",
-    "package:linux": "npm run build && electron-builder --linux",
-    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-    "generate-icons": "bash scripts/generate-icons.sh"
+    "typecheck": "tsc -p tsconfig.renderer.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "tauri": "tauri",
+    "package": "CI=true tauri build",
+    "package:styled": "tauri build",
+    "package:debug": "CI=true tauri build --debug",
+    "generate-icons": "tauri icon assets/icon.png"
   },
   "keywords": [
     "claude",
     "usage",
     "widget",
-    "electron"
+    "tauri"
   ],
   "author": "James Bolton",
   "license": "MIT",
@@ -37,97 +33,21 @@
     "npm": ">=10.0.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^25.2.3",
-    "concurrently": "^9.2.1",
-    "cross-env": "^7.0.3",
-    "electron": "^40.4.1",
-    "electron-builder": "^26.7.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "happy-dom": "^20.10.6",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
-    "wait-on": "^9.0.4"
+    "vitest": "^4.1.10"
   },
   "dependencies": {
-    "electron-store": "^8.1.0"
+    "@tauri-apps/api": "^2.11.1"
   },
   "optionalDependencies": {
     "@rollup/rollup-darwin-arm64": "^4.0.0",
     "@rollup/rollup-darwin-x64": "^4.0.0",
     "@rollup/rollup-linux-x64-gnu": "^4.0.0",
     "@rollup/rollup-win32-x64-msvc": "^4.0.0"
-  },
-  "build": {
-    "appId": "com.claudeusage.widget",
-    "productName": "Agent Usage",
-    "directories": {
-      "output": "dist"
-    },
-    "asar": true,
-    "compression": "maximum",
-    "removePackageScripts": true,
-    "nodeGypRebuild": false,
-    "npmRebuild": false,
-    "electronLanguages": [
-      "en-US"
-    ],
-    "files": [
-      "dist-main/**/*",
-      "!dist-main/**/*.map",
-      "dist-renderer/**/*",
-      "assets/icon.icns",
-      "assets/icon.ico",
-      "assets/icon.png",
-      "assets/tray-icon.png",
-      "assets/claude-logo.svg",
-      "package.json"
-    ],
-    "extraMetadata": {
-      "main": "dist-main/main/main.js"
-    },
-    "win": {
-      "target": [
-        "nsis",
-        "portable"
-      ],
-      "icon": "assets/icon.ico"
-    },
-    "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "icon": "assets/icon.icns",
-      "category": "public.app-category.utilities",
-      "minimumSystemVersion": "12.0"
-    },
-    "dmg": {
-      "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "icon": "assets/icon.png",
-      "category": "Utility"
-    },
-    "portable": {
-      "artifactName": "${productName}-${version}-portable.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    }
   }
 }

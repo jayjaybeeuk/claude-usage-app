@@ -31,6 +31,8 @@ A beautiful, standalone Windows, Mac and Linux desktop app that displays your Cl
 
 - Node.js 22.12+ ([Download](https://nodejs.org))
 - npm (comes with Node.js)
+- Rust stable toolchain ([rustup.rs](https://rustup.rs)) — the app is built with Tauri v2
+- Platform build tools: Xcode Command Line Tools (macOS), MSVC Build Tools + WebView2 (Windows), `webkit2gtk` dev packages (Linux)
 
 **Steps:**
 
@@ -42,25 +44,28 @@ cd claude-usage-app
 # Install dependencies
 npm install
 
-# Run in development mode (Vite + TS watch + Electron)
+# Run in development mode (tauri dev — starts Vite automatically)
 npm run dev
 
 # Run in development mode with verbose auth/debug logging
 npm run dev:debug
 
-# Build production bundles (TS + renderer)
+# Bundle the renderer only
 npm run build
 
-# Package an installer/binary for your platform
+# Package an installer/binary for the current platform (DMG/app, NSIS, AppImage/deb)
 npm run package
-
-# Or target a specific platform
-npm run package:win
-npm run package:mac
-npm run package:linux
 ```
 
-Packaged artifacts will be created in the `dist/` folder.
+Packaged artifacts will be created under `src-tauri/target/release/bundle/`.
+
+> **Note (macOS):** `npm run package` builds the DMG with `CI=true`, which skips the
+> Finder-scripted DMG window styling — that step requires Automation permission
+> (System Settings → Privacy & Security → Automation → your terminal → Finder) and
+> fails on machines where it's not granted. If you want the styled DMG and have the
+> permission, use `npm run package:styled`. If a styled build fails partway, detach
+> any leftover image with `hdiutil detach` and delete `rw.*.dmg` files under
+> `src-tauri/target/release/bundle/macos/` before retrying.
 
 ## Usage
 
@@ -186,31 +191,31 @@ npm install
 
 ## Privacy & Security
 
-- Your session credentials are stored **locally only** using encrypted storage
+- Your session credentials are stored **locally only** in the app's data directory
 - No data is sent to any third-party servers
 - The widget only communicates with Claude.ai official API
-- Session cookies are stored using Electron's secure storage
-- **Logout** completely removes the session key from encrypted storage, clears all Claude.ai cookies, and wipes Electron session storage (localStorage, sessionStorage, cacheStorage) so nothing lingers on shared machines
+- Session cookies live in the OS webview's cookie store (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux)
+- **Logout** removes the session key from local storage and clears the webview browsing data (cookies, localStorage, caches) so nothing lingers on shared machines
 
 ### Session Key Storage Details
 
 The `sessionKey` (a bearer token for Claude.ai) is stored in two places:
 
-| Location                                                                      | Purpose                                       | Cleared on logout? |
-| ----------------------------------------------------------------------------- | --------------------------------------------- | ------------------ |
-| `%APPDATA%/claude-usage-app/config.json` (encrypted via `electron-store`)     | Persists credentials between app restarts     | Yes                |
-| Electron in-memory session cookie (`.claude.ai` domain, `secure`, `httpOnly`) | Used by hidden BrowserWindow for API requests | Yes                |
+| Location                                                                     | Purpose                                          | Cleared on logout? |
+| ---------------------------------------------------------------------------- | ------------------------------------------------ | ------------------ |
+| `settings.json` in the app data dir (e.g. `~/Library/Application Support/com.claudeusage.widget/`) | Persists credentials between app restarts | Yes                |
+| OS webview cookie store (`.claude.ai` domain, `secure`)                      | Used by hidden webview windows for API requests  | Yes                |
 
-The encryption key is embedded in the application. This protects against casual file inspection but not against a determined attacker with access to the source code. For shared machines, always log out when finished.
+Credentials are stored as plain JSON readable only by your OS user account (the old Electron build's "encryption" used a key embedded in the app, which offered equivalent practical protection). For shared machines, always log out when finished.
 
 ## Technical Details
 
 **Built with:**
 
-- Electron (see `package.json` for the current version)
-- TypeScript (main + renderer)
+- Tauri v2 (Rust backend, OS webview UI)
+- TypeScript (renderer)
 - Vite (renderer bundling)
-- electron-store for local credential storage
+- tauri-plugin-store for local credential storage
 
 **API Endpoint:**
 
@@ -221,19 +226,17 @@ https://claude.ai/api/organizations/{org_id}/usage
 **Storage Location:**
 
 ```
-%APPDATA%/claude-usage-app/config.json (encrypted)
+<app data dir>/com.claudeusage.widget/settings.json
 ```
 
 **Debug Mode:**
 
-To enable verbose logging, run with the `--debug` flag or set the `DEBUG_LOG=1` environment variable:
+To enable verbose logging, set the `DEBUG_LOG=1` environment variable:
 
 ```bash
-# Via flag
-electron . --debug
-
-# Via env var
-DEBUG_LOG=1 npm run dev:debug
+DEBUG_LOG=1 npm run dev
+# or for a packaged app on macOS:
+DEBUG_LOG=1 "/Applications/Agent Usage.app/Contents/MacOS/agent-usage"
 ```
 
 ## Roadmap
@@ -247,7 +250,7 @@ DEBUG_LOG=1 npm run dev:debug
 - [x] Usage history graphs
 - [ ] Multiple account support
 - [ ] Keyboard shortcuts
-- [ ] Migrate from Electron to Tauri for smaller binary size (~10MB vs ~200MB)
+- [x] Migrate from Electron to Tauri for smaller binary size (~10MB vs ~200MB)
 
 ## Contributing
 

@@ -54,24 +54,17 @@ Then package an installer/binary:
 
 ```bash
 npm run package
-# Windows:
-npm run package:win
 ```
 
-Output: `dist/` (electron-builder artifacts)
+Output: `src-tauri/target/release/bundle/` (Tauri bundler artifacts for the current platform)
 
 ## Development Tips
 
 ### Enable DevTools
 
-Already enabled in dev mode. To disable, edit `src/main/main.ts`: 
-
-```javascript
-if (process.env.NODE_ENV === "development") {
-  // Comment out this line:
-  // mainWindow.webContents.openDevTools({ mode: 'detach' });
-}
-```
+Available in dev/debug builds — right-click the widget and choose Inspect, or call
+`window.open_devtools()` from Rust. Renderer errors are also forwarded to the Vite
+terminal in dev mode (see `clientLogSink` in `vite.config.ts`).
 
 ### Test Without Building
 
@@ -127,18 +120,28 @@ return;
 ```
 claude-usage-app/
 ├── package.json
-├── src/
-│   ├── main/
-│   │   ├── main.ts
-│   │   ├── preload.ts
-│   │   └── fetch-via-window.ts
-│   ├── renderer/
+├── src-tauri/
+│   ├── tauri.conf.json
+│   ├── capabilities/
+│   └── src/
+│       ├── main.rs
+│       ├── commands.rs
+│       ├── claude.rs
+│       ├── codex.rs
+│       ├── fetch_via_window.rs
+│       ├── tray.rs
+│       ├── settings.rs
+│       └── state.rs
+├── src/                     # Frontend only (the Electron main process is gone;
+│   │                        # its logic now lives in Rust under src-tauri/)
+│   ├── renderer/            # The widget UI, unchanged from the Electron version
 │   │   ├── index.html
 │   │   ├── styles.css
+│   │   ├── tauri-api.ts     # window.electronAPI shim over Tauri IPC
 │   │   └── app.ts
-│   └── shared/
-│       ├── ipc-channels.ts
-│       └── ipc-types.ts
+│   └── shared/              # Renderer types/constants (ElectronAPI contract)
+│       ├── ipc-types.ts
+│       └── refresh-interval.ts
 └── assets/
     ├── icon.*
     └── tray-icon.png
@@ -148,7 +151,8 @@ claude-usage-app/
 
 ### Port Already in Use
 
-Electron doesn't use ports, so this shouldn't happen.
+Dev mode runs Vite on port 5173 (strict). Stop whatever else is using it, or change the
+port in `vite.config.ts` and `src-tauri/tauri.conf.json` (`build.devUrl`) together.
 
 ### White Screen on Launch
 
@@ -160,11 +164,11 @@ Check console for errors. Usually means:
 
 ### Login Window Not Capturing Session
 
-Check `src/main/main.ts` - the BrowserWindow + cookie listener flow should:
+Check `src-tauri/src/claude.rs` (`detect_session_key`) — the login window + cookie polling flow should:
 
-1. Check URL contains 'chat' or 'new'
-2. Extract sessionKey cookie
-3. Try to get organization ID
+1. Open a webview window at claude.ai/login
+2. Poll `cookies_for_url` for the `sessionKey` cookie
+3. Try to get organization ID via `validate_session_key`
 
 ### API Returns 401
 
@@ -175,14 +179,14 @@ Session expired. Click "Re-login" from tray menu.
 ### Custom Themes
 
 Built-in themes live in `src/renderer/styles.css`, and the allowed theme values are validated in
-`src/main/main.ts`.
+`src-tauri/src/commands.rs`.
 
 To add a new theme:
 
 1. Add a new `[data-theme="..."]` block in `src/renderer/styles.css`
 2. Define the widget background plus both Claude and Codex color tokens
 3. Add the new option to the theme dropdown in `src/renderer/index.html`
-4. Add the theme key to the `validThemes` array in `src/main/main.ts`
+4. Add the theme key to the `VALID_THEMES` array in `src-tauri/src/commands.rs`
 
 Example structure:
 
@@ -211,19 +215,8 @@ if (weeklyUtilization >= 90) {
 
 ### Keyboard Shortcuts
 
-Add to `src/main/main.ts`:
-
-```ts
-import { globalShortcut } from 'electron'
-
-app.whenReady().then(() => {
-  globalShortcut.register('CommandOrControl+Shift+C', () => {
-    if (mainWindow) {
-      mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()
-    }
-  })
-})
-```
+Add the `tauri-plugin-global-shortcut` plugin and register a shortcut in
+`src-tauri/src/main.rs` that toggles the main window's visibility.
 
 ## Debugging
 
@@ -247,11 +240,11 @@ await window.electronAPI.getCredentials();
 
 ## Publishing
 
-1. Update version in `package.json`
-2. Run `npm run package:win`
-3. Test the installer in `dist/`
+1. Update version in `package.json` and `src-tauri/tauri.conf.json` (and `src-tauri/Cargo.toml`)
+2. Run `npm run package`
+3. Test the artifacts in `src-tauri/target/release/bundle/`
 4. Create GitHub release
-5. Upload the installer/artifacts from `dist/`
+5. Upload the installer/artifacts
 
 ## Next Steps
 

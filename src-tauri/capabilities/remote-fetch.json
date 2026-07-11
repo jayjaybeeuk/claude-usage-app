@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "remote-fetch",
+  "description": "Allow hidden claude.ai fetch windows to report page bodies back to Rust. Claude.ai blocks non-browser HTTP clients via Cloudflare, so API responses are read out of a real webview page via an init script that invokes report_fetch_result.",
+  "windows": ["api-fetch-*"],
+  "remote": {
+    "urls": ["https://claude.ai", "https://*.claude.ai"]
+  },
+  "permissions": [
+    "allow-report-fetch-result"
+  ]
+}

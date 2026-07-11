@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-cached-usage"
+description = "Enables the get_cached_usage command without any pre-configured scope."
+commands.allow = ["get_cached_usage"]
+
+[[permission]]
+identifier = "deny-get-cached-usage"
+description = "Denies the get_cached_usage command without any pre-configured scope."
+commands.deny = ["get_cached_usage"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fetch-usage-data"
+description = "Enables the fetch_usage_data command without any pre-configured scope."
+commands.allow = ["fetch_usage_data"]
+
+[[permission]]
+identifier = "deny-fetch-usage-data"
+description = "Denies the fetch_usage_data command without any pre-configured scope."
+commands.deny = ["fetch_usage_data"]

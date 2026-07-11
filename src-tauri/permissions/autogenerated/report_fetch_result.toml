@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-report-fetch-result"
+description = "Enables the report_fetch_result command without any pre-configured scope."
+commands.allow = ["report_fetch_result"]
+
+[[permission]]
+identifier = "deny-report-fetch-result"
+description = "Denies the report_fetch_result command without any pre-configured scope."
+commands.deny = ["report_fetch_result"]
