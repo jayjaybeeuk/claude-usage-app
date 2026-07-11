@@ -82,6 +82,10 @@ describe('tauri-api shim', () => {
     expect(b.state.codexCredentials.accessToken).toBeNull()
     expect(await api.getCachedUsage()).toBeNull()
     expect(await api.getCachedCodexUsage()).toBeNull()
+    expect(await api.getOrganizations()).toEqual([])
+    b.state.orgUsage = { 'org-x': { five_hour: { utilization: 1 } } }
+    expect(await api.fetchUsageDataForOrg('org-x')).toEqual({ five_hour: { utilization: 1 } })
+    expect(b.callsFor('fetch_usage_for_org')).toEqual([{ organizationId: 'org-x' }])
     expect(await api.detectSessionKey()).toMatchObject({ success: false })
     expect(await api.detectCodexToken()).toMatchObject({ success: false })
     expect(await api.validateSessionKey('x')).toMatchObject({ success: false })

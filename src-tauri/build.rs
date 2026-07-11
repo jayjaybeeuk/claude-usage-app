@@ -12,6 +12,8 @@ const COMMANDS: &[&str] = &[
     "detect_session_key",
     "fetch_usage_data",
     "get_cached_usage",
+    "get_organizations",
+    "fetch_usage_for_org",
     // Hidden-window fetch bridge (remote claude.ai pages)
     "report_fetch_result",
     // Codex

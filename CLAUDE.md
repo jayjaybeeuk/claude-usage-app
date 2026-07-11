@@ -54,6 +54,12 @@ npm test                 # Vitest renderer suite (happy-dom + mocked Tauri backe
 npm run test:coverage    # Same suite with 70% coverage thresholds enforced
 npm run test:rust        # cargo test — Rust unit tests (parsing/normalization logic)
 npm run package          # tauri build — release bundle for current platform
+```
+
+Git pushes run typecheck + both test suites via the husky pre-push hook
+(`.husky/pre-push`); a failing suite or a coverage drop below 70% blocks the push.
+
+```bash
 npm run package:debug    # tauri build --debug — debug bundle (faster compile)
 npm run generate-icons   # Regenerate src-tauri/icons from assets/icon.png
 ```
@@ -91,5 +97,13 @@ All requests go to `claude.ai/api/organizations/{orgId}/`:
 - `usage` — session and weekly utilization (required)
 - `overage_spend_limit` — spending limits (optional)
 - `prepaid/credits` — prepaid balance (optional)
+
+`claude.ai/api/organizations` lists every org the session can access. The first
+org is the primary (full UI, tray, history); the rest are fetched via
+`fetch_usage_for_org` and rendered as compact sections (`extraOrgsSection` in
+app.ts) with session/weekly bars only. The org list is cached in the store
+(`organizations`) at validate time and lazily refetched by `get_organizations`
+for logins that predate multi-org support. Secondary-org fetch failures hide
+that section without touching the primary session state.
 
 Codex usage comes from `chatgpt.com/backend-api/wham/usage` via reqwest (bearer token or session cookie).

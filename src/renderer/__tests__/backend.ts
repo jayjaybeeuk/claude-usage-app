@@ -13,6 +13,9 @@ export interface BackendState {
   usageData: unknown
   usageError: string | null
   cachedUsage: unknown
+  organizations: Array<{ id: string; name?: string; ravenType?: string }>
+  /** Usage payloads for secondary orgs, keyed by organization id. */
+  orgUsage: Record<string, unknown>
   codexCredentials: { accessToken: string | null }
   codexUsageData: unknown
   codexUsageError: string | null
@@ -46,6 +49,8 @@ export function createBackend(overrides: Partial<BackendState> = {}): Backend {
     usageData: null,
     usageError: null,
     cachedUsage: null,
+    organizations: [],
+    orgUsage: {},
     codexCredentials: { accessToken: null },
     codexUsageData: null,
     codexUsageError: null,
@@ -98,6 +103,13 @@ export function createBackend(overrides: Partial<BackendState> = {}): Backend {
         return state.usageData
       case 'get_cached_usage':
         return state.cachedUsage
+      case 'get_organizations':
+        return state.organizations
+      case 'fetch_usage_for_org': {
+        const usage = state.orgUsage[args.organizationId as string]
+        if (!usage) throw `InvalidJSON: no usage for ${args.organizationId}`
+        return usage
+      }
 
       // Window controls
       case 'minimize_window':

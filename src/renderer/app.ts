@@ -1,7 +1,15 @@
 import './tauri-api' // installs window.electronAPI — must stay the first import
 import './styles.css'
 import { DEFAULT_REFRESH_MINUTES, MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES } from '../shared/refresh-interval'
-import type { Credentials, UsageData, UsageTimePeriod, ExtraUsage, UsageHistoryEntry, CodexUsageData } from '../shared/ipc-types'
+import type {
+  Credentials,
+  UsageData,
+  UsageTimePeriod,
+  ExtraUsage,
+  UsageHistoryEntry,
+  CodexUsageData,
+  OrganizationInfo,
+} from '../shared/ipc-types'
 
 // Application state
 let credentials: Credentials | null = null
@@ -22,7 +30,12 @@ const WIDGET_ROW_HEIGHT = 30
 const GRAPH_HEIGHT = 170 // graph section height including padding
 const PIE_HEIGHT = 162 // pie section height including padding — must match .pie-section CSS height
 const SONNET_ROW_HEIGHT = 30 // sonnet row height
+const EXTRA_ORG_SECTION_HEIGHT = 28 + 32 + 32 // divider + session row + weekly row
 let lastNonSettingsHeight = WIDGET_HEIGHT_COLLAPSED
+
+// Additional Claude organizations (the session may access several orgs, e.g.
+// an enterprise and a team org; the primary org uses the main section above)
+let extraOrgs: Array<{ org: OrganizationInfo; data: UsageData }> = []
 
 // Codex state
 let codexHasData = false
@@ -135,6 +148,7 @@ const elements = {
 
   expandSection: getElement<HTMLDivElement>('expandSection'),
   extraRows: getElement<HTMLDivElement>('extraRows'),
+  extraOrgsSection: getElement<HTMLDivElement>('extraOrgsSection'),
 
   settingsBtn: getElement<HTMLButtonElement>('settingsBtn'),
   settingsOverlay: getElement<HTMLDivElement>('settingsOverlay'),
@@ -212,7 +226,115 @@ async function loadRefreshInterval(): Promise<void> {
 
 async function refreshAllUsageData(): Promise<void> {
   await fetchUsageData()
+  await fetchExtraOrgsUsage()
   await fetchCodexUsageData()
+}
+
+// ─── Additional Claude organizations ─────────────────────────────────────────
+
+async function fetchExtraOrgsUsage(): Promise<void> {
+  try {
+    if (!credentials?.sessionKey || !credentials.organizationId) {
+      extraOrgs = []
+      renderExtraOrgSections()
+      return
+    }
+
+    const orgs = await window.electronAPI.getOrganizations()
+    const primaryId = credentials.organizationId
+    const others = orgs.filter((org) => org.id !== primaryId)
+
+    // Label the primary section with its org name once we know there are
+    // several orgs, so the sections are distinguishable.
+    if (orgs.length > 1) {
+      const primary = orgs.find((org) => org.id === primaryId)
+      const subtitle = document.querySelector('.claude-divider .service-divider-subtitle')
+      if (primary?.name && subtitle) {
+        subtitle.textContent = primary.name
+      }
+    }
+
+    const results = await Promise.all(
+      others.map(async (org) => {
+        try {
+          const data = await window.electronAPI.fetchUsageDataForOrg(org.id)
+          return { org, data }
+        } catch (error) {
+          debugLog('Secondary org usage fetch failed:', org.id, error)
+          return null
+        }
+      }),
+    )
+    extraOrgs = results.filter((entry): entry is { org: OrganizationInfo; data: UsageData } => entry !== null)
+    renderExtraOrgSections()
+    resizeWidget()
+  } catch (error) {
+    // Non-fatal: the primary section is unaffected by multi-org failures.
+    debugLog('Failed to load additional organizations:', error)
+  }
+}
+
+function extraOrgRowHTML(label: string, period: UsageTimePeriod | undefined, colorClass: string, totalMinutes: number): string {
+  const utilization = Math.min(Math.max(period?.utilization ?? 0, 0), 100)
+  const levelClass = utilization >= 90 ? ' danger' : utilization >= 75 ? ' warning' : ''
+  return `
+        <div class="usage-section">
+            <span class="usage-label">${label}</span>
+            <div class="progress-bar">
+                <div class="progress-fill ${colorClass}${levelClass}" style="width: ${utilization}%"></div>
+            </div>
+            <span class="usage-percentage">${Math.round(utilization)}%</span>
+            <div class="timer-container">
+                <div class="timer-text" data-resets="${period?.resets_at || ''}" data-total="${totalMinutes}">--:--</div>
+                <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
+                    <circle class="timer-bg" cx="12" cy="12" r="10" />
+                    <circle class="timer-progress ${colorClass}" cx="12" cy="12" r="10"
+                        style="stroke-dasharray: 63; stroke-dashoffset: 63" />
+                </svg>
+            </div>
+        </div>`
+}
+
+function renderExtraOrgSections(): void {
+  const container = elements.extraOrgsSection
+  if (extraOrgs.length === 0) {
+    container.innerHTML = ''
+    return
+  }
+
+  container.innerHTML = extraOrgs
+    .map(({ org, data }) => {
+      const name = org.name || 'Claude Organization'
+      return `
+        <div class="service-divider claude-divider">
+            <span class="service-divider-label">Claude</span>
+            <span class="service-divider-subtitle">${escapeHtml(name)}</span>
+        </div>
+        ${extraOrgRowHTML('Current Session', data.five_hour, '', 5 * 60)}
+        ${extraOrgRowHTML('Weekly Limit', data.seven_day, 'weekly', 7 * 24 * 60)}`
+    })
+    .join('')
+
+  refreshExtraOrgTimers()
+}
+
+function escapeHtml(text: string): string {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+function refreshExtraOrgTimers(): void {
+  const timerTexts = elements.extraOrgsSection.querySelectorAll<HTMLDivElement>('.timer-text')
+  const timerCircles = elements.extraOrgsSection.querySelectorAll<SVGCircleElement>('.timer-progress')
+  timerTexts.forEach((textEl, i) => {
+    const resetsAt = textEl.dataset.resets
+    const totalMinutes = parseInt(textEl.dataset.total || '0')
+    const circleEl = timerCircles[i]
+    if (circleEl) {
+      updateTimer(circleEl, textEl, resetsAt || null, totalMinutes)
+    }
+  })
 }
 
 async function setRefreshIntervalMinutes(minutes: number): Promise<void> {
@@ -896,6 +1018,9 @@ function resizeWidget(): void {
     height += 12 + extraCount * WIDGET_ROW_HEIGHT
   }
 
+  // Add sections for additional Claude organizations
+  height += extraOrgs.length * EXTRA_ORG_SECTION_HEIGHT
+
   // Codex section is always visible on the same page
   if (codexHasData) {
     height += CODEX_SECTION_BASE_HEIGHT + CODEX_STATUS_HEIGHT
@@ -1009,6 +1134,7 @@ function startCountdown(): void {
     refreshTimers()
     refreshSonnetTimer()
     if (isExpanded) refreshExtraTimers()
+    if (extraOrgs.length > 0) refreshExtraOrgTimers()
   }, 1000)
 }
 
@@ -1115,6 +1241,8 @@ function updateUsageRing(ringElement: SVGCircleElement, utilization: number): vo
 
 // UI State Management
 function showLoginRequired(): void {
+  extraOrgs = []
+  elements.extraOrgsSection.innerHTML = ''
   elements.loadingContainer.style.display = 'none'
   elements.loginContainer.style.display = 'flex'
   elements.noUsageContainer.style.display = 'none'

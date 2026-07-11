@@ -7,6 +7,7 @@ A beautiful, standalone Windows, Mac and Linux desktop app that displays your Cl
 ## Features
 
 - 🎯 **Real-time Usage Tracking** - Monitor both session and weekly usage limits
+- 🏢 **Multiple Organizations** - If your Claude account belongs to several orgs (e.g. an enterprise and a team plan), each one gets its own usage section
 - 📊 **Visual Progress Bars** - Clean, gradient progress indicators
 - ⏱️ **Countdown Timers** - Circular timers showing time until reset
 - 🔄 **Auto-refresh** - Updates every 5 minutes by default (changeable in Settings)
@@ -93,6 +94,23 @@ Right-click the tray icon for:
 - Re-login (if session expires)
 - Open Settings
 - Exit application
+
+### Multiple Claude Organizations
+
+If your login has access to more than one organization (for example an enterprise
+org and a separate team org), the widget shows them all:
+
+- The **primary org** (the first one Claude returns) keeps the full section —
+  progress bars, Sonnet/Opus breakdowns, spending, history graph, and pie chart.
+  Its section header shows the org name.
+- Each **additional org** gets a compact section below with its own name,
+  Current Session and Weekly Limit bars, and countdown timers.
+- The tray title and usage history track the primary org.
+
+No extra setup is needed — the org list is detected from your existing login
+(including logins made before this feature existed). If an additional org's
+data can't be fetched, its section is simply hidden; the primary org is
+unaffected.
 
 ## Understanding the Display
 

@@ -20,6 +20,12 @@ export interface WindowBounds {
   height: number
 }
 
+export interface OrganizationInfo {
+  id: string
+  name?: string | null
+  ravenType?: string | null
+}
+
 export interface ValidationResult {
   success: boolean
   organizationId?: string
@@ -123,6 +129,8 @@ export interface ElectronAPI {
   onDebugLog: (callback: (label: string, data: unknown) => void) => void
   fetchUsageData: () => Promise<UsageData>
   getCachedUsage: () => Promise<CachedUsageData | null>
+  getOrganizations: () => Promise<OrganizationInfo[]>
+  fetchUsageDataForOrg: (organizationId: string) => Promise<UsageData>
   openExternal: (url: string) => void
   updateTrayUsage: (stats: TrayUsageStats) => void
   getUsageHistory: () => Promise<UsageHistoryEntry[]>

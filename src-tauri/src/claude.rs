@@ -30,6 +30,14 @@ pub struct ValidationResult {
     pub error: Option<String>,
 }
 
+#[derive(Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OrgInfo {
+    pub id: String,
+    pub name: Option<String>,
+    pub raven_type: Option<String>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DetectSessionResult {
@@ -38,6 +46,40 @@ pub struct DetectSessionResult {
     pub session_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+/// Parse the /api/organizations response into the org identifiers the widget
+/// cares about. Accounts can belong to several orgs (e.g. an enterprise and a
+/// team org) and usage is tracked per org.
+fn extract_org_infos(value: &Value) -> Vec<OrgInfo> {
+    let Some(orgs) = value.as_array() else {
+        return Vec::new();
+    };
+    orgs.iter()
+        .filter_map(|org| {
+            let id = org
+                .get("uuid")
+                .or_else(|| org.get("id"))
+                .and_then(|v| v.as_str())?
+                .to_string();
+            Some(OrgInfo {
+                id,
+                name: org.get("name").and_then(|v| v.as_str()).map(String::from),
+                raven_type: org
+                    .get("raven_type")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+            })
+        })
+        .collect()
+}
+
+fn store_organizations(app: &AppHandle, orgs: &[OrgInfo]) {
+    if !orgs.is_empty() {
+        if let Ok(value) = serde_json::to_value(orgs) {
+            settings::set(app, "organizations", value);
+        }
+    }
 }
 
 fn session_cookie_string(session_key: &str) -> String {
@@ -96,8 +138,37 @@ pub async fn save_credentials(
 pub fn delete_credentials(app: AppHandle) -> bool {
     settings::delete(&app, "sessionKey");
     settings::delete(&app, "organizationId");
+    settings::delete(&app, "organizations");
     clear_webview_session(&app);
     true
+}
+
+/// All organizations the logged-in session can access. Served from the
+/// settings cache when present; otherwise fetched live and cached, which also
+/// upgrades installs that logged in before multi-org support existed.
+#[tauri::command]
+pub async fn get_organizations(app: AppHandle) -> Result<Vec<OrgInfo>, String> {
+    if let Some(cached) = settings::get(&app, "organizations") {
+        if let Ok(orgs) = serde_json::from_value::<Vec<OrgInfo>>(cached) {
+            if !orgs.is_empty() {
+                return Ok(orgs);
+            }
+        }
+    }
+
+    let data = fetch_via_window(&app, "https://claude.ai/api/organizations", None, 30000).await?;
+    let orgs = extract_org_infos(&data);
+    store_organizations(&app, &orgs);
+    Ok(orgs)
+}
+
+/// Usage for a single (secondary) organization. Errors are returned as-is;
+/// the renderer treats a failing secondary org as "hide that section" rather
+/// than a session problem.
+#[tauri::command]
+pub async fn fetch_usage_for_org(app: AppHandle, organization_id: String) -> Result<Value, String> {
+    let url = format!("https://claude.ai/api/organizations/{organization_id}/usage");
+    fetch_via_window(&app, &url, None, 30000).await
 }
 
 /// Validate a sessionKey by planting it as a cookie and fetching the
@@ -117,16 +188,15 @@ pub async fn validate_session_key(app: AppHandle, session_key: String) -> Valida
     )
     .await
     {
-        Ok(Value::Array(orgs)) => {
-            let org_id = orgs.first().and_then(|org| {
-                org.get("uuid")
-                    .or_else(|| org.get("id"))
-                    .and_then(|v| v.as_str())
-                    .map(String::from)
-            });
-            match org_id {
-                Some(id) => {
-                    debug_log!("Session key validated, org ID: {id}");
+        Ok(value @ Value::Array(_)) => {
+            let orgs = extract_org_infos(&value);
+            // Remember every org the session can access; the renderer shows
+            // usage for all of them (primary first).
+            store_organizations(&app, &orgs);
+            match orgs.first() {
+                Some(first) => {
+                    let id = first.id.clone();
+                    debug_log!("Session key validated, {} org(s), primary: {id}", orgs.len());
                     ValidationResult {
                         success: true,
                         organization_id: Some(id),
@@ -402,6 +472,25 @@ pub fn get_cached_usage(app: AppHandle) -> Option<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extracts_org_infos_from_api_response() {
+        let response = json!([
+            { "uuid": "org-1", "name": "Enterprise Org", "raven_type": "enterprise" },
+            { "id": "org-2", "name": "Team Org", "raven_type": "team" },
+            { "name": "no-id-entry" }
+        ]);
+        let orgs = extract_org_infos(&response);
+        assert_eq!(orgs.len(), 2);
+        assert_eq!(orgs[0].id, "org-1");
+        assert_eq!(orgs[0].name.as_deref(), Some("Enterprise Org"));
+        assert_eq!(orgs[0].raven_type.as_deref(), Some("enterprise"));
+        assert_eq!(orgs[1].id, "org-2");
+        assert_eq!(orgs[1].raven_type.as_deref(), Some("team"));
+
+        assert!(extract_org_infos(&json!({ "error": "nope" })).is_empty());
+        assert!(extract_org_infos(&json!([])).is_empty());
+    }
 
     #[test]
     fn builds_the_session_cookie_string() {

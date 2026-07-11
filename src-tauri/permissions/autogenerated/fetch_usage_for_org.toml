@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fetch-usage-for-org"
+description = "Enables the fetch_usage_for_org command without any pre-configured scope."
+commands.allow = ["fetch_usage_for_org"]
+
+[[permission]]
+identifier = "deny-fetch-usage-for-org"
+description = "Denies the fetch_usage_for_org command without any pre-configured scope."
+commands.deny = ["fetch_usage_for_org"]

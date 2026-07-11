@@ -20,6 +20,7 @@ import type {
   DetectCodexResult,
   DetectSessionResult,
   ElectronAPI,
+  OrganizationInfo,
   SaveCodexCredentialsPayload,
   SaveCredentialsPayload,
   TrayUsageStats,
@@ -86,6 +87,9 @@ const api: ElectronAPI = {
   // API
   fetchUsageData: () => call<UsageData>('fetch_usage_data'),
   getCachedUsage: () => call<CachedUsageData | null>('get_cached_usage'),
+  getOrganizations: () => call<OrganizationInfo[]>('get_organizations'),
+  fetchUsageDataForOrg: (organizationId: string) =>
+    call<UsageData>('fetch_usage_for_org', { organizationId }),
   openExternal: (url: string) => void call('open_external', { url }),
   updateTrayUsage: (stats: TrayUsageStats) => void call('update_tray_usage', { stats }),
 

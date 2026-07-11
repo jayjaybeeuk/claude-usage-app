@@ -13,6 +13,8 @@
     "allow-detect-session-key",
     "allow-fetch-usage-data",
     "allow-get-cached-usage",
+    "allow-get-organizations",
+    "allow-fetch-usage-for-org",
     "allow-get-codex-credentials",
     "allow-save-codex-credentials",
     "allow-delete-codex-credentials",

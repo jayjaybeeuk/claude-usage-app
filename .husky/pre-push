@@ -1,0 +1,13 @@
+# Run the full test suites before anything leaves this machine.
+# Fails the push if typecheck, renderer coverage thresholds (70%), or the
+# Rust unit tests fail.
+export PATH="$HOME/.cargo/bin:$PATH"
+
+echo "pre-push: typecheck"
+npm run typecheck
+
+echo "pre-push: renderer tests (with coverage thresholds)"
+npm run test:coverage
+
+echo "pre-push: rust tests"
+cargo test --manifest-path src-tauri/Cargo.toml --quiet

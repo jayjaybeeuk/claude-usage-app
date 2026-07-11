@@ -40,6 +40,8 @@ fn main() {
             claude::detect_session_key,
             claude::fetch_usage_data,
             claude::get_cached_usage,
+            claude::get_organizations,
+            claude::fetch_usage_for_org,
             // Hidden-window fetch bridge
             fetch_via_window::report_fetch_result,
             // Codex
@@ -111,24 +113,13 @@ fn main() {
             // claude.ai pages). Run with TEST_FETCH=1; expects a JSON error
             // from the API since no session cookie is present.
             if std::env::var("TEST_FETCH").map(|v| v == "1").unwrap_or(false) {
+                let url = std::env::var("TEST_FETCH_URL")
+                    .unwrap_or_else(|_| "https://claude.ai/api/organizations".into());
                 let test_handle = handle.clone();
                 tauri::async_runtime::spawn(async move {
-                    let result = fetch_via_window::fetch_via_window(
-                        &test_handle,
-                        "https://claude.ai/api/organizations",
-                        None,
-                        30000,
-                    )
-                    .await;
-                    println!("[TEST_FETCH] direct result: {result:?}");
-                    let result = fetch_via_window::fetch_via_window(
-                        &test_handle,
-                        "https://claude.ai/api/organizations",
-                        Some("sessionKey=sk-ant-test-invalid; domain=.claude.ai; path=/; secure"),
-                        30000,
-                    )
-                    .await;
-                    println!("[TEST_FETCH] cookie-hop result: {result:?}");
+                    let result =
+                        fetch_via_window::fetch_via_window(&test_handle, &url, None, 30000).await;
+                    println!("[TEST_FETCH] {url} => {result:?}");
                 });
             }
 
