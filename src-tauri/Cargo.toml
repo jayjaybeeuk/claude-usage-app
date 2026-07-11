@@ -1,6 +1,6 @@
 [package]
 name = "agent-usage"
-version = "3.0.2"
+version = "3.1.0"
 description = "Desktop widget for agent usage monitoring"
 authors = ["James Bolton"]
 license = "MIT"
