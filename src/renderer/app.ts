@@ -1260,6 +1260,15 @@ function updateUsageRing(ringElement: SVGCircleElement, utilization: number): vo
 // UI State Management
 function showLoginRequired(): void {
   extraOrgs = []
+  // Drop stale usage state so the countdown cannot keep re-rendering it
+  // (or schedule expired-window refetches) after logout.
+  latestUsageData = null
+  sessionResetTriggered = false
+  weeklyResetTriggered = false
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+    countdownInterval = null
+  }
   elements.extraOrgsSection.innerHTML = ''
   elements.loadingContainer.style.display = 'none'
   elements.loginContainer.style.display = 'flex'

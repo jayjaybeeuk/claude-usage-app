@@ -176,6 +176,29 @@ describe('window lifecycle', () => {
     expect(heights[heights.length - 1]).toBe(164)
   })
 
+  it('stops the countdown and drops stale usage data on logout', async () => {
+    vi.useFakeTimers()
+    const b = backend()
+    b.state.credentials = { sessionKey: 'sk', organizationId: 'org' }
+    b.state.usageData = {
+      // Resets 2 seconds from now — expires shortly after logout
+      five_hour: { utilization: 40, resets_at: new Date(Date.now() + 2_000).toISOString() },
+      seven_day: { utilization: 50, resets_at: futureIso(48) },
+    }
+    await import('../app')
+    await vi.advanceTimersByTimeAsync(100)
+    const textAtLogout = el('sessionTimeText').textContent
+
+    el('logoutBtn').click()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(el('loginContainer').style.display).toBe('flex')
+
+    // Without the cleanup the countdown keeps ticking against the stale
+    // data and flips the timer to Resetting... after the window expires.
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(el('sessionTimeText').textContent).toBe(textAtLogout)
+  })
+
   it('forwards backend debug logs to the console', async () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const b = await bootApp()
