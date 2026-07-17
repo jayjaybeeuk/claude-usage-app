@@ -230,9 +230,11 @@ async function loadRefreshInterval(): Promise<void> {
 }
 
 async function refreshAllUsageData(): Promise<void> {
+  // Codex first, so the single history entry saved by fetchUsageData
+  // captures this cycle's Codex values rather than the previous one's.
+  await fetchCodexUsageData()
   await fetchUsageData()
   await fetchExtraOrgsUsage()
-  await fetchCodexUsageData()
 }
 
 // Push the tray stats built from the latest known data (primary org,
@@ -1470,18 +1472,8 @@ async function fetchCodexUsageData(): Promise<void> {
     updateCodexStatusText()
     startCodexStatusTimer()
 
-    const codexHistoryEntry: UsageHistoryEntry = {
-      timestamp: codexLastRefreshTime,
-      session: latestUsageData?.five_hour?.utilization || 0,
-      weekly: latestUsageData?.seven_day?.utilization || 0,
-      sonnet: latestUsageData?.seven_day_sonnet?.utilization || 0,
-      opus: latestUsageData?.seven_day_opus?.utilization,
-      cowork: latestUsageData?.seven_day_cowork?.utilization,
-      oauthApps: latestUsageData?.seven_day_oauth_apps?.utilization,
-      codexSession: data.five_hour?.utilization,
-      codexWeekly: data.seven_day?.utilization,
-    }
-    await window.electronAPI.saveUsageHistoryEntry(codexHistoryEntry)
+    // History is recorded once per refresh cycle by fetchUsageData, which
+    // includes these Codex values (refreshAllUsageData fetches Codex first).
 
     // Update tray with Codex stats included
     pushTrayUsage()
