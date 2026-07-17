@@ -219,8 +219,13 @@ function resizeForSettings(): void {
 }
 
 async function loadRefreshInterval(): Promise<void> {
-  const saved = await window.electronAPI.getRefreshIntervalMinutes()
-  refreshIntervalMinutes = clampRefreshMinutes(saved)
+  try {
+    const saved = await window.electronAPI.getRefreshIntervalMinutes()
+    refreshIntervalMinutes = clampRefreshMinutes(saved)
+  } catch (error) {
+    console.warn('Failed to load refresh interval, using default:', error)
+    refreshIntervalMinutes = DEFAULT_REFRESH_MINUTES
+  }
   updateRefreshIntervalUI(refreshIntervalMinutes)
 }
 
@@ -494,7 +499,14 @@ async function init(): Promise<void> {
   await loadTheme()
   await loadBackgroundHue()
   await checkAutoStartSupport()
-  credentials = await window.electronAPI.getCredentials()
+  try {
+    credentials = await window.electronAPI.getCredentials()
+  } catch (error) {
+    // A failing settings store must not leave the app stuck on the
+    // loading spinner — fall through to the login screen.
+    console.error('Failed to load credentials:', error)
+    credentials = { sessionKey: null, organizationId: null }
+  }
 
   if (credentials.sessionKey && credentials.organizationId) {
     showMainContent()

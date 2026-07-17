@@ -25,6 +25,20 @@ describe('settings failure fallbacks', () => {
     expect(el('autoStartSection').style.display).toBe('none')
   })
 
+  it('boots to the login screen even when startup settings reads fail', async () => {
+    const b = backend()
+    b.state.errors.get_refresh_interval = 'store unavailable'
+    b.state.errors.get_credentials = 'store unavailable'
+    await bootApp()
+    await flush(20)
+
+    // Not stuck on the loading spinner: the login screen is shown and
+    // the refresh interval falls back to the 5-minute default.
+    expect(el('loginContainer').style.display).toBe('flex')
+    expect(el('loadingContainer').style.display).toBe('none')
+    expect(el('refreshIntervalValue').textContent).toBe('5 minutes')
+  })
+
   it('defaults the auto-start toggle off when reading the setting fails', async () => {
     const b = backend()
     b.state.errors.get_auto_start = 'store unavailable'
