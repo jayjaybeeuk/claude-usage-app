@@ -304,7 +304,7 @@ function extraOrgRowHTML(label: string, period: UsageTimePeriod | undefined, col
             </div>
             <span class="usage-percentage">${Math.round(utilization)}%</span>
             <div class="timer-container">
-                <div class="timer-text" data-resets="${period?.resets_at || ''}" data-total="${totalMinutes}">--:--</div>
+                <div class="timer-text" data-resets="${escapeAttr(period?.resets_at || '')}" data-total="${totalMinutes}">--:--</div>
                 <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
                     <circle class="timer-bg" cx="12" cy="12" r="10" />
                     <circle class="timer-progress ${colorClass}" cx="12" cy="12" r="10"
@@ -341,6 +341,12 @@ function escapeHtml(text: string): string {
   const div = document.createElement('div')
   div.textContent = text
   return div.innerHTML
+}
+
+// escapeHtml does not escape quotes, so API-provided values placed inside
+// HTML attributes (e.g. data-resets="...") need this instead.
+function escapeAttr(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 }
 
 function refreshExtraOrgTimers(): void {
@@ -941,7 +947,7 @@ function buildExtraRows(data: UsageData): number {
       const totalMinutes = key.includes('seven_day') ? 7 * 24 * 60 : 5 * 60
       timerHTML = `
                 <div class="timer-container">
-                    <div class="timer-text" data-resets="${resetsAt || ''}" data-total="${totalMinutes}">--:--</div>
+                    <div class="timer-text" data-resets="${escapeAttr(resetsAt || '')}" data-total="${totalMinutes}">--:--</div>
                     <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
                         <circle class="timer-bg" cx="12" cy="12" r="10" />
                         <circle class="timer-progress ${colorClass}" cx="12" cy="12" r="10"
