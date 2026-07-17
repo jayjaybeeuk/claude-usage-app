@@ -1062,6 +1062,11 @@ function resizeWidget(): void {
 function updateUI(data: UsageData): void {
   latestUsageData = data
 
+  if (hasNoUsage(data)) {
+    showNoUsage()
+    return
+  }
+
   showMainContent()
 
   // Show/hide Weekly Sonnet row

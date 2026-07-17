@@ -81,7 +81,12 @@ describe('chart rendering', () => {
   it('shows the pie chart no-data message when everything is zero', async () => {
     const b = backend()
     b.state.credentials = { sessionKey: 'sk', organizationId: 'org' }
-    b.state.usageData = { five_hour: { utilization: 0 }, seven_day: { utilization: 0 } }
+    // A reset timestamp keeps the main content visible (utilization is
+    // all-zero, so the pie itself still hits its no-data branch)
+    b.state.usageData = {
+      five_hour: { utilization: 0, resets_at: futureIso(2) },
+      seven_day: { utilization: 0 },
+    }
     await bootApp()
     await flush(50)
 
