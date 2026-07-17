@@ -39,6 +39,31 @@ describe('additional Claude organizations', () => {
     expect(timers[0].textContent).not.toBe('--:--')
   })
 
+  it('escapes hostile resets_at values instead of injecting markup', async () => {
+    const b = backend()
+    b.state.credentials = { sessionKey: 'sk', organizationId: 'org-ent' }
+    b.state.usageData = sampleUsage()
+    b.state.organizations = [
+      { id: 'org-ent', name: 'Enterprise Org' },
+      { id: 'org-evil', name: 'Evil Org' },
+    ]
+    b.state.orgUsage = {
+      'org-evil': {
+        five_hour: { utilization: 1, resets_at: '"><img id="pwned" src=x>' },
+        seven_day: { utilization: 1, resets_at: futureIso(48) },
+      },
+    }
+    await bootApp()
+    await flush(60)
+
+    const section = el('extraOrgsSection')
+    expect(section.querySelector('#pwned')).toBeNull()
+    expect(section.querySelector('img')).toBeNull()
+    // The raw value round-trips through the attribute unharmed
+    const timer = section.querySelector<HTMLDivElement>('.timer-text')
+    expect(timer?.dataset.resets).toBe('"><img id="pwned" src=x>')
+  })
+
   it('includes additional orgs in tray usage updates', async () => {
     const b = await bootTwoOrgs()
     await flush(60)

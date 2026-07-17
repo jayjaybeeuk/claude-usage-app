@@ -43,6 +43,20 @@ describe('usage data handling', () => {
     expect(el('sonnetRow').style.display).toBe('none')
   })
 
+  it('shows the no-usage screen for zero utilization with no reset windows', async () => {
+    const b = await bootWithUsage({ five_hour: { utilization: 0 }, seven_day: { utilization: 0 } })
+    await flush(50)
+    expect(el('noUsageContainer').style.display).toBe('flex')
+    expect(el('mainContent').style.display).toBe('none')
+
+    // Once usage appears, a refresh returns to the main content
+    b.state.usageData = sampleUsage()
+    b.emit('refresh-usage')
+    await flush(50)
+    expect(el('noUsageContainer').style.display).toBe('none')
+    expect(el('mainContent').style.display).toBe('block')
+  })
+
   it('renders countdown timers for future resets', async () => {
     await bootWithUsage()
     await flush(50)

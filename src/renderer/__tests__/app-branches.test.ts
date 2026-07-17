@@ -35,11 +35,13 @@ describe('branch coverage details', () => {
   it('defaults missing utilization fields to 0 and greys out absent timers', async () => {
     const b = backend()
     b.state.credentials = { sessionKey: 'sk', organizationId: 'org' }
-    b.state.usageData = { five_hour: {}, seven_day: {} }
+    // Some weekly usage so the widget shows main content (all-zero data
+    // with no resets renders the dedicated no-usage screen instead)
+    b.state.usageData = { five_hour: {}, seven_day: { utilization: 1 } }
     await bootApp()
     await flush(50)
     expect(el('sessionPercentage').textContent).toBe('0%')
-    expect(el('weeklyPercentage').textContent).toBe('0%')
+    expect(el('weeklyPercentage').textContent).toBe('1%')
     expect(el('sessionTimeText').textContent).toBe('--:--')
     expect(el('sessionTimeText').style.opacity).toBe('0.5')
   })

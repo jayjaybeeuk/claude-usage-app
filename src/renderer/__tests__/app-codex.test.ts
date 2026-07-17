@@ -35,6 +35,25 @@ describe('codex section', () => {
     expect(trayCalls.some((c) => c.stats.codexSession === 33)).toBe(true)
   })
 
+  it('saves one history entry per refresh cycle, including codex values', async () => {
+    const b = backend()
+    b.state.codexCredentials = { accessToken: 'tok' }
+    b.state.codexUsageData = sampleCodexUsage()
+    await bootClaudeOnly()
+    await flush(60)
+
+    // One combined entry from boot — not one per service
+    const saves = b.callsFor('save_usage_history_entry') as Array<{ entry: Record<string, unknown> }>
+    expect(saves).toHaveLength(1)
+    expect(saves[0].entry.session).toBe(42)
+    expect(saves[0].entry.codexSession).toBe(33)
+    expect(saves[0].entry.codexWeekly).toBe(55)
+
+    b.emit('refresh-usage')
+    await flush(60)
+    expect(b.callsFor('save_usage_history_entry')).toHaveLength(2)
+  })
+
   it('connects via auto-detect and renders usage', async () => {
     const b = await bootClaudeOnly()
     await flush(40)

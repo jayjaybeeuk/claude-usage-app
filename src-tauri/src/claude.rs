@@ -542,6 +542,20 @@ mod tests {
     }
 
     #[test]
+    fn accepts_numeric_is_enabled_and_string_amounts() {
+        // Some API variants report is_enabled as 1/0 and amounts as strings
+        let source = json!({ "is_enabled": 1, "monthly_limit": "4000", "used_credits": "1000" });
+        let result = normalize_extra_usage(Some(&source)).unwrap();
+        assert_eq!(result["utilization"], json!(25.0));
+        assert_eq!(result["limit_cents"], json!(4000.0));
+
+        assert!(normalize_extra_usage(Some(&json!({
+            "is_enabled": 0, "monthly_limit": 100, "used_credits": 5
+        })))
+        .is_none());
+    }
+
+    #[test]
     fn rejects_disabled_zero_limit_or_negative_usage() {
         assert!(normalize_extra_usage(Some(&json!({
             "is_enabled": false, "monthly_limit": 100, "used_credits": 5

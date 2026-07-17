@@ -219,15 +219,22 @@ function resizeForSettings(): void {
 }
 
 async function loadRefreshInterval(): Promise<void> {
-  const saved = await window.electronAPI.getRefreshIntervalMinutes()
-  refreshIntervalMinutes = clampRefreshMinutes(saved)
+  try {
+    const saved = await window.electronAPI.getRefreshIntervalMinutes()
+    refreshIntervalMinutes = clampRefreshMinutes(saved)
+  } catch (error) {
+    console.warn('Failed to load refresh interval, using default:', error)
+    refreshIntervalMinutes = DEFAULT_REFRESH_MINUTES
+  }
   updateRefreshIntervalUI(refreshIntervalMinutes)
 }
 
 async function refreshAllUsageData(): Promise<void> {
+  // Codex first, so the single history entry saved by fetchUsageData
+  // captures this cycle's Codex values rather than the previous one's.
+  await fetchCodexUsageData()
   await fetchUsageData()
   await fetchExtraOrgsUsage()
-  await fetchCodexUsageData()
 }
 
 // Push the tray stats built from the latest known data (primary org,
@@ -304,7 +311,7 @@ function extraOrgRowHTML(label: string, period: UsageTimePeriod | undefined, col
             </div>
             <span class="usage-percentage">${Math.round(utilization)}%</span>
             <div class="timer-container">
-                <div class="timer-text" data-resets="${period?.resets_at || ''}" data-total="${totalMinutes}">--:--</div>
+                <div class="timer-text" data-resets="${escapeAttr(period?.resets_at || '')}" data-total="${totalMinutes}">--:--</div>
                 <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
                     <circle class="timer-bg" cx="12" cy="12" r="10" />
                     <circle class="timer-progress ${colorClass}" cx="12" cy="12" r="10"
@@ -341,6 +348,12 @@ function escapeHtml(text: string): string {
   const div = document.createElement('div')
   div.textContent = text
   return div.innerHTML
+}
+
+// escapeHtml does not escape quotes, so API-provided values placed inside
+// HTML attributes (e.g. data-resets="...") need this instead.
+function escapeAttr(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 }
 
 function refreshExtraOrgTimers(): void {
@@ -488,7 +501,14 @@ async function init(): Promise<void> {
   await loadTheme()
   await loadBackgroundHue()
   await checkAutoStartSupport()
-  credentials = await window.electronAPI.getCredentials()
+  try {
+    credentials = await window.electronAPI.getCredentials()
+  } catch (error) {
+    // A failing settings store must not leave the app stuck on the
+    // loading spinner — fall through to the login screen.
+    console.error('Failed to load credentials:', error)
+    credentials = { sessionKey: null, organizationId: null }
+  }
 
   if (credentials.sessionKey && credentials.organizationId) {
     showMainContent()
@@ -941,7 +961,7 @@ function buildExtraRows(data: UsageData): number {
       const totalMinutes = key.includes('seven_day') ? 7 * 24 * 60 : 5 * 60
       timerHTML = `
                 <div class="timer-container">
-                    <div class="timer-text" data-resets="${resetsAt || ''}" data-total="${totalMinutes}">--:--</div>
+                    <div class="timer-text" data-resets="${escapeAttr(resetsAt || '')}" data-total="${totalMinutes}">--:--</div>
                     <svg class="mini-timer" width="24" height="24" viewBox="0 0 24 24">
                         <circle class="timer-bg" cx="12" cy="12" r="10" />
                         <circle class="timer-progress ${colorClass}" cx="12" cy="12" r="10"
@@ -1061,6 +1081,11 @@ function resizeWidget(): void {
 
 function updateUI(data: UsageData): void {
   latestUsageData = data
+
+  if (hasNoUsage(data)) {
+    showNoUsage()
+    return
+  }
 
   showMainContent()
 
@@ -1255,6 +1280,15 @@ function updateUsageRing(ringElement: SVGCircleElement, utilization: number): vo
 // UI State Management
 function showLoginRequired(): void {
   extraOrgs = []
+  // Drop stale usage state so the countdown cannot keep re-rendering it
+  // (or schedule expired-window refetches) after logout.
+  latestUsageData = null
+  sessionResetTriggered = false
+  weeklyResetTriggered = false
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+    countdownInterval = null
+  }
   elements.extraOrgsSection.innerHTML = ''
   elements.loadingContainer.style.display = 'none'
   elements.loginContainer.style.display = 'flex'
@@ -1438,18 +1472,8 @@ async function fetchCodexUsageData(): Promise<void> {
     updateCodexStatusText()
     startCodexStatusTimer()
 
-    const codexHistoryEntry: UsageHistoryEntry = {
-      timestamp: codexLastRefreshTime,
-      session: latestUsageData?.five_hour?.utilization || 0,
-      weekly: latestUsageData?.seven_day?.utilization || 0,
-      sonnet: latestUsageData?.seven_day_sonnet?.utilization || 0,
-      opus: latestUsageData?.seven_day_opus?.utilization,
-      cowork: latestUsageData?.seven_day_cowork?.utilization,
-      oauthApps: latestUsageData?.seven_day_oauth_apps?.utilization,
-      codexSession: data.five_hour?.utilization,
-      codexWeekly: data.seven_day?.utilization,
-    }
-    await window.electronAPI.saveUsageHistoryEntry(codexHistoryEntry)
+    // History is recorded once per refresh cycle by fetchUsageData, which
+    // includes these Codex values (refreshAllUsageData fetches Codex first).
 
     // Update tray with Codex stats included
     pushTrayUsage()

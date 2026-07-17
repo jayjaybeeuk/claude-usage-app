@@ -632,6 +632,42 @@ mod tests {
     }
 
     #[test]
+    fn find_window_root_gives_up_below_depth_three() {
+        let shallow = json!({ "a": { "b": { "c": { "primary_window": { "used_percent": 5 } } } } });
+        assert_eq!(parse_codex_usage_response(&shallow)["five_hour"]["utilization"], json!(5.0));
+
+        let deep = json!({ "a": { "b": { "c": { "d": { "primary_window": { "used_percent": 5 } } } } } });
+        assert_eq!(parse_codex_usage_response(&deep), json!({}));
+    }
+
+    #[test]
+    fn windows_use_the_user_percent_alias_and_skip_invalid_entries() {
+        let raw = json!({
+            "primary_window": { "user_percent": "17.5" },
+            "secondary_window": { "used_percent": "not-a-number" }
+        });
+        let parsed = parse_codex_usage_response(&raw);
+        assert_eq!(parsed["five_hour"]["utilization"], json!(17.5));
+        // Invalid secondary window is dropped rather than defaulting to 0
+        assert!(parsed.get("seven_day").is_none());
+    }
+
+    #[test]
+    fn to_used_percent_inverts_remaining_capacity() {
+        // Fractions (<= 1.0) are scaled to percent before inverting
+        assert_eq!(to_used_percent(Some(&json!(1.0))), Some(0.0));
+        assert_eq!(to_used_percent(Some(&json!(0.0))), Some(100.0));
+        // Values above 1.0 are treated as percentages
+        assert_eq!(to_used_percent(Some(&json!(30))), Some(70.0));
+        assert_eq!(to_used_percent(Some(&json!("25"))), Some(75.0));
+        // Out-of-range results clamp to 0-100
+        assert_eq!(to_used_percent(Some(&json!(150))), Some(0.0));
+        assert_eq!(to_used_percent(Some(&json!(-50))), Some(100.0));
+        assert_eq!(to_used_percent(Some(&json!("abc"))), None);
+        assert_eq!(to_used_percent(None), None);
+    }
+
+    #[test]
     fn normalize_resets_at_prefers_strings_then_numbers_then_offsets() {
         assert_eq!(
             normalize_resets_at(Some(&json!("2026-01-01T00:00:00Z")), None),
@@ -647,5 +683,10 @@ mod tests {
         let relative = normalize_resets_at(None, Some(&json!(60)));
         assert!(relative.is_string());
         assert_eq!(normalize_resets_at(None, None), Value::Null);
+        // An empty reset_at string falls through to the relative offset
+        let fallback = normalize_resets_at(Some(&json!("")), Some(&json!(60)));
+        assert!(fallback.is_string());
+        // Non-finite / non-numeric reset values resolve to null
+        assert_eq!(normalize_resets_at(Some(&json!(true)), None), Value::Null);
     }
 }
