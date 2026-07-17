@@ -46,15 +46,18 @@ pub async fn fetch_via_window(
     timeout_ms: u64,
 ) -> Result<Value, String> {
     let body = fetch_body_via_window(app, url, set_cookie, timeout_ms).await?;
+    parse_fetch_body(&body)
+}
 
-    // Detect known block/failure signatures before attempting JSON parse.
+/// Detect known block/failure signatures before attempting JSON parse.
+fn parse_fetch_body(body: &str) -> Result<Value, String> {
     for (pattern, error) in BLOCKED_SIGNATURES {
         if body.contains(pattern) {
-            return Err(format!("{error}: {}", truncate(&body, 200)));
+            return Err(format!("{error}: {}", truncate(body, 200)));
         }
     }
 
-    serde_json::from_str::<Value>(&body).map_err(|_| format!("InvalidJSON: {}", truncate(&body, 200)))
+    serde_json::from_str::<Value>(body).map_err(|_| format!("InvalidJSON: {}", truncate(body, 200)))
 }
 
 /// Same as `fetch_via_window` but returns the raw body text without
@@ -149,5 +152,50 @@ pub async fn fetch_body_via_window(
 pub fn report_fetch_result(state: tauri::State<'_, AppState>, label: String, body: String) {
     if let Some(tx) = state.fetch_pending.lock().unwrap().remove(&label) {
         let _ = tx.send(body);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parses_valid_json_bodies() {
+        assert_eq!(parse_fetch_body("{\"a\": 1}").unwrap(), json!({ "a": 1 }));
+        assert_eq!(parse_fetch_body("[1, 2]").unwrap(), json!([1, 2]));
+        // API error payloads are still valid JSON and pass through
+        assert_eq!(
+            parse_fetch_body("{\"error\": \"Unauthorized\"}").unwrap(),
+            json!({ "error": "Unauthorized" })
+        );
+    }
+
+    #[test]
+    fn detects_cloudflare_block_signatures() {
+        let err = parse_fetch_body("Just a moment...").unwrap_err();
+        assert!(err.starts_with("CloudflareBlocked:"));
+
+        let err = parse_fetch_body("Enable JavaScript and cookies to continue").unwrap_err();
+        assert!(err.starts_with("CloudflareChallenge:"));
+
+        let err = parse_fetch_body("<html><body>nope</body></html>").unwrap_err();
+        assert!(err.starts_with("UnexpectedHTML:"));
+    }
+
+    #[test]
+    fn reports_invalid_json_with_a_truncated_preview() {
+        let long_body = "x".repeat(500);
+        let err = parse_fetch_body(&long_body).unwrap_err();
+        assert!(err.starts_with("InvalidJSON: "));
+        assert_eq!(err.len(), "InvalidJSON: ".len() + 200);
+    }
+
+    #[test]
+    fn truncate_respects_char_boundaries() {
+        assert_eq!(truncate("hello", 10), "hello");
+        assert_eq!(truncate("hello", 2), "he");
+        // Multibyte characters are counted as chars, not bytes
+        assert_eq!(truncate("héllo", 2), "hé");
     }
 }
