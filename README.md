@@ -204,6 +204,20 @@ Look for lines that begin with:
 
 ### Build errors
 
+**`failed to run 'cargo metadata' ... No such file or directory`** (from `npm run dev` / `npm run package`)
+
+The Tauri CLI can't find `cargo` on your PATH. `npm run dev` now runs a preflight
+check (`scripts/check-rust.mjs`) that reports this before Tauri starts:
+
+- If Rust isn't installed, install the stable toolchain from [rustup.rs](https://rustup.rs).
+- If Rust **is** installed (`~/.cargo/bin/cargo` exists), your PATH is missing it —
+  fix the current shell with `source "$HOME/.cargo/env"`. If it happens in every new
+  terminal, check that no shell profile (e.g. `~/.zprofile`) overwrites PATH with an
+  `export PATH=...` line that doesn't end in `:$PATH` — login shells run `~/.zprofile`
+  *after* `~/.zshenv`, so it can silently drop the cargo entry.
+
+**Other build errors**
+
 ```bash
 # Clear cache and reinstall
 rm -rf node_modules package-lock.json
