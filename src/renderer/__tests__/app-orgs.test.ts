@@ -8,6 +8,9 @@ const TEAM_USAGE = {
   seven_day: { utilization: 93, resets_at: futureIso(48) },
 }
 
+// What a dataless org (e.g. enterprise orgs without per-seat stats) returns.
+const NO_USAGE = { five_hour: null, seven_day: null }
+
 function bootTwoOrgs() {
   const b = backend()
   b.state.credentials = { sessionKey: 'sk', organizationId: 'org-ent' }
@@ -145,6 +148,69 @@ describe('additional Claude organizations', () => {
     el('logoutBtn').click()
     await flush(30)
     expect(el('extraOrgsSection').innerHTML).toBe('')
+  })
+
+  it('promotes an org with usage data when the primary reports none', async () => {
+    const b = backend()
+    b.state.credentials = { sessionKey: 'sk', organizationId: 'org-ent' }
+    b.state.usageData = NO_USAGE
+    b.state.organizations = [
+      { id: 'org-ent', name: 'Enterprise Org', ravenType: 'enterprise' },
+      { id: 'org-team', name: 'Team Org', ravenType: 'team' },
+    ]
+    b.state.orgUsage = { 'org-ent': NO_USAGE, 'org-team': TEAM_USAGE }
+    await bootApp()
+    await flush(60)
+
+    // Credentials switch (and persist) to the org that has data
+    expect(b.state.credentials.organizationId).toBe('org-team')
+    // The widget leaves the "no usage yet" screen and shows that org's stats
+    expect(el('noUsageContainer').style.display).toBe('none')
+    expect(el('mainContent').style.display).toBe('block')
+    expect(el('sessionPercentage').textContent).toBe('12%')
+    const subtitle = document.querySelector('.claude-divider .service-divider-subtitle')
+    expect(subtitle?.textContent).toBe('Team Org')
+    // The demoted org becomes a secondary section
+    expect(el('extraOrgsSection').textContent).toContain('Enterprise Org')
+  })
+
+  it('does not record zero history entries while the primary org has no data', async () => {
+    const b = backend()
+    b.state.credentials = { sessionKey: 'sk', organizationId: 'org-ent' }
+    b.state.usageData = NO_USAGE
+    b.state.organizations = [
+      { id: 'org-ent', name: 'Enterprise Org' },
+      { id: 'org-team', name: 'Team Org' },
+    ]
+    b.state.orgUsage = { 'org-team': TEAM_USAGE }
+    await bootApp()
+    await flush(60)
+
+    const saves = b.callsFor('save_usage_history_entry') as Array<{
+      entry: { session: number; weekly: number }
+    }>
+    expect(saves.length).toBeGreaterThan(0)
+    for (const { entry } of saves) {
+      expect(entry.session).toBe(12)
+      expect(entry.weekly).toBe(93)
+    }
+  })
+
+  it('stays on the no-usage screen when no org reports usage', async () => {
+    const b = backend()
+    b.state.credentials = { sessionKey: 'sk', organizationId: 'org-ent' }
+    b.state.usageData = NO_USAGE
+    b.state.organizations = [
+      { id: 'org-ent', name: 'Enterprise Org' },
+      { id: 'org-b', name: 'B Org' },
+    ]
+    b.state.orgUsage = { 'org-b': NO_USAGE }
+    await bootApp()
+    await flush(60)
+
+    expect(b.state.credentials.organizationId).toBe('org-ent')
+    expect(el('noUsageContainer').style.display).toBe('flex')
+    expect(b.callsFor('save_usage_history_entry')).toHaveLength(0)
   })
 
   it('escapes org names when rendering', async () => {

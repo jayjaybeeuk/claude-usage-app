@@ -97,10 +97,15 @@ export function createBackend(overrides: Partial<BackendState> = {}): Backend {
         return state.validateResult
       case 'detect_session_key':
         return state.detectResult
-      case 'fetch_usage_data':
+      case 'fetch_usage_data': {
         if (state.usageError) throw state.usageError
+        // Mirror the Rust backend: the fetch targets the *stored*
+        // organizationId, so a per-org payload wins when one exists.
+        const orgId = state.credentials.organizationId
+        if (orgId && state.orgUsage[orgId]) return state.orgUsage[orgId]
         if (!state.usageData) throw 'Missing credentials'
         return state.usageData
+      }
       case 'get_cached_usage':
         return state.cachedUsage
       case 'get_organizations':
