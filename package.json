@@ -1,6 +1,6 @@
 {
   "name": "agent-usage",
-  "version": "3.2.2",
+  "version": "3.2.3",
   "description": "Desktop widget for agent usage monitoring",
   "scripts": {
     "check:rust": "node scripts/check-rust.mjs",
