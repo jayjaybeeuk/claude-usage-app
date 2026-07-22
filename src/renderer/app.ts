@@ -257,7 +257,7 @@ function pushTrayUsage(): void {
 
 // ─── Additional Claude organizations ─────────────────────────────────────────
 
-async function fetchExtraOrgsUsage(): Promise<void> {
+async function fetchExtraOrgsUsage(allowPromotion = true): Promise<void> {
   try {
     if (!credentials?.sessionKey || !credentials.organizationId) {
       extraOrgs = []
@@ -291,6 +291,27 @@ async function fetchExtraOrgsUsage(): Promise<void> {
       }),
     )
     extraOrgs = results.filter((entry): entry is { org: OrganizationInfo; data: UsageData } => entry !== null)
+
+    // A dataless primary org (e.g. an enterprise org that reports no
+    // per-seat usage) leaves the widget on the "no usage yet" screen and
+    // fills the history with zeros even though another org has real stats.
+    // Promote the first org that reports usage and re-fetch as that org.
+    if (allowPromotion && latestUsageData && hasNoUsage(latestUsageData)) {
+      const candidate = extraOrgs.find(({ data }) => !hasNoUsage(data))
+      const sessionKey = credentials?.sessionKey
+      if (candidate && sessionKey) {
+        debugLog('Primary org reports no usage data, promoting:', candidate.org.id)
+        credentials = { sessionKey, organizationId: candidate.org.id }
+        await window.electronAPI.saveCredentials({
+          sessionKey,
+          organizationId: candidate.org.id,
+        })
+        await fetchUsageData()
+        await fetchExtraOrgsUsage(false)
+        return
+      }
+    }
+
     renderExtraOrgSections()
     pushTrayUsage()
     resizeWidget()
@@ -834,18 +855,23 @@ async function fetchUsageData(): Promise<void> {
     updateStatusText()
     startStatusTimer()
 
-    const historyEntry: UsageHistoryEntry = {
-      timestamp: lastRefreshTime,
-      session: data.five_hour?.utilization || 0,
-      weekly: data.seven_day?.utilization || 0,
-      sonnet: data.seven_day_sonnet?.utilization || 0,
-      opus: data.seven_day_opus?.utilization,
-      cowork: data.seven_day_cowork?.utilization,
-      oauthApps: data.seven_day_oauth_apps?.utilization,
-      codexSession: latestCodexData?.five_hour?.utilization,
-      codexWeekly: latestCodexData?.seven_day?.utilization,
+    // A dataless org reports no five_hour/seven_day periods at all —
+    // recording it would fill the graph with meaningless zeros. Only keep
+    // such an entry when it carries Codex values worth graphing.
+    if (!hasNoUsage(data) || latestCodexData) {
+      const historyEntry: UsageHistoryEntry = {
+        timestamp: lastRefreshTime,
+        session: data.five_hour?.utilization || 0,
+        weekly: data.seven_day?.utilization || 0,
+        sonnet: data.seven_day_sonnet?.utilization || 0,
+        opus: data.seven_day_opus?.utilization,
+        cowork: data.seven_day_cowork?.utilization,
+        oauthApps: data.seven_day_oauth_apps?.utilization,
+        codexSession: latestCodexData?.five_hour?.utilization,
+        codexWeekly: latestCodexData?.seven_day?.utilization,
+      }
+      await window.electronAPI.saveUsageHistoryEntry(historyEntry)
     }
-    await window.electronAPI.saveUsageHistoryEntry(historyEntry)
 
     // Update tray with latest stats (includes additional orgs and Codex)
     pushTrayUsage()
