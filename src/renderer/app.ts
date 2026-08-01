@@ -685,11 +685,13 @@ function setupEventListeners(): void {
   })
 
   elements.coffeeBtn.addEventListener('click', () => {
-    window.electronAPI.openExternal('https://paypal.me/SlavomirDurej?country.x=GB&locale.x=en_GB')
+    const url = elements.coffeeBtn.dataset.donationUrl || 'https://github.com/sponsors/jayjaybeeuk'
+    window.electronAPI.openExternal(url)
   })
 
   elements.coffeeBtnAlt.addEventListener('click', () => {
-    window.electronAPI.openExternal('https://paypal.me/JamesBolton?country.x=GB&locale.x=en_GB')
+    const url = elements.coffeeBtnAlt.dataset.donationUrl || 'https://github.com/sponsors/jayjaybeeuk'
+    window.electronAPI.openExternal(url)
   })
 
   // Listen for refresh requests from tray
