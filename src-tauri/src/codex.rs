@@ -420,8 +420,22 @@ pub async fn detect_codex_token(app: AppHandle) -> DetectCodexResult {
         }
     };
 
+    // Add 10-minute timeout for login
+    let login_timeout = Duration::from_secs(600);
+    let start_time = std::time::Instant::now();
     loop {
         tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // Check timeout
+        if start_time.elapsed() >= login_timeout {
+            let _ = win.destroy();
+            return DetectCodexResult {
+                success: false,
+                access_token: None,
+                cookie_name: None,
+                error: Some("Login timeout (10 minutes)".into()),
+            };
+        }
 
         if app.get_webview_window(CODEX_LOGIN_WINDOW_LABEL).is_none() {
             return DetectCodexResult {
