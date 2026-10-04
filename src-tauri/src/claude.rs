@@ -272,8 +272,21 @@ pub async fn detect_session_key(app: AppHandle) -> DetectSessionResult {
     };
 
     let check_url: tauri::Url = "https://claude.ai".parse().unwrap();
+    // Add 10-minute timeout for login
+    let login_timeout = Duration::from_secs(600);
+    let start_time = std::time::Instant::now();
     loop {
         tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // Check timeout
+        if start_time.elapsed() >= login_timeout {
+            let _ = win.destroy();
+            return DetectSessionResult {
+                success: false,
+                session_key: None,
+                error: Some("Login timeout (10 minutes)".into()),
+            };
+        }
 
         if app.get_webview_window(LOGIN_WINDOW_LABEL).is_none() {
             return DetectSessionResult {
