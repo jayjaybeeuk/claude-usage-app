@@ -40,12 +40,28 @@ describe('settings failure fallbacks', () => {
   })
 
   it('defaults the auto-start toggle off when reading the setting fails', async () => {
+    // Set up debug mode so debugLog calls console.log
+    const originalSearch = window.location.search
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, search: '?debug=1' },
+      writable: true,
+    })
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
     const b = backend()
     b.state.errors.get_auto_start = 'store unavailable'
     await bootApp()
 
     expect(el('autoStartSection').style.display).toBe('block')
     expect((el('autoStartToggle') as HTMLInputElement).checked).toBe(false)
+    expect(consoleSpy).toHaveBeenCalledWith('[Debug]', 'Failed to load auto-start setting:', expect.any(Error))
+
+    consoleSpy.mockRestore()
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, search: originalSearch },
+      writable: true,
+    })
   })
 
   it('keeps the UI consistent when saving theme or hue fails', async () => {
