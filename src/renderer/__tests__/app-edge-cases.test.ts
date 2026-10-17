@@ -25,6 +25,25 @@ describe('settings failure fallbacks', () => {
     expect(el('autoStartSection').style.display).toBe('none')
   })
 
+  it('hides auto-start section and logs error when checking support fails', async () => {
+    const originalUrl = window.location.href
+    window.history.replaceState({}, '', '?debug=true')
+
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    try {
+      const b = backend()
+      b.state.errors.is_auto_start_supported = 'Failed to check auto-start support'
+      await bootApp()
+
+      expect(el('autoStartSection').style.display).toBe('none')
+      expect(spy).toHaveBeenCalledWith('[Debug]', 'Failed to check auto-start support:', expect.any(Error))
+    } finally {
+      spy.mockRestore()
+      window.history.replaceState({}, '', originalUrl)
+    }
+  })
+
   it('boots to the login screen even when startup settings reads fail', async () => {
     const b = backend()
     b.state.errors.get_refresh_interval = 'store unavailable'
