@@ -1644,18 +1644,36 @@ async function renderUsageChart(): Promise<void> {
     }
 
     const sortedKeys = Object.keys(hourlyData).sort()
-    const labels = sortedKeys.map((k) => {
+    const len = sortedKeys.length
+    const labels = new Array(len)
+    const sessionData = new Array(len)
+    const weeklyData = new Array(len)
+    const sonnetData = new Array(len)
+    const opusData = new Array(len)
+    const coworkData = new Array(len)
+
+    let hasOpus = false
+    let hasCowork = false
+
+    for (let i = 0; i < len; i++) {
+      const k = sortedKeys[i]
       const parts = k.split(' ')
       const dateParts = parts[0].split('-')
-      return `${dateParts[1]}/${dateParts[2]} ${parts[1]}`
-    })
-    const sessionData = sortedKeys.map((k) => hourlyData[k].session)
-    const weeklyData = sortedKeys.map((k) => hourlyData[k].weekly)
-    const sonnetData = sortedKeys.map((k) => hourlyData[k].sonnet || 0)
-    const opusData = sortedKeys.map((k) => hourlyData[k].opus || 0)
-    const coworkData = sortedKeys.map((k) => hourlyData[k].cowork || 0)
-    const hasOpus = opusData.some((v) => v > 0)
-    const hasCowork = coworkData.some((v) => v > 0)
+      labels[i] = `${dateParts[1]}/${dateParts[2]} ${parts[1]}`
+
+      const data = hourlyData[k]
+      sessionData[i] = data.session
+      weeklyData[i] = data.weekly
+      sonnetData[i] = data.sonnet || 0
+
+      const opus = data.opus || 0
+      opusData[i] = opus
+      if (opus > 0) hasOpus = true
+
+      const cowork = data.cowork || 0
+      coworkData[i] = cowork
+      if (cowork > 0) hasCowork = true
+    }
 
     const canvas = elements.usageChart
     const dpr = window.devicePixelRatio || 1
