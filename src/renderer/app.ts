@@ -1636,6 +1636,19 @@ async function handleCodexManualToken(): Promise<void> {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Group usage history entries by hour
+function groupHistoryByHour(recent: UsageHistoryEntry[]): Record<string, UsageHistoryEntry> {
+  const hourlyData: Record<string, UsageHistoryEntry> = {}
+  for (const entry of recent) {
+    const date = new Date(entry.timestamp)
+    const hourKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`
+    if (!hourlyData[hourKey] || entry.timestamp > hourlyData[hourKey].timestamp) {
+      hourlyData[hourKey] = entry
+    }
+  }
+  return hourlyData
+}
+
 // Lightweight Canvas 2D usage history chart (no external dependencies)
 async function renderUsageChart(): Promise<void> {
   try {
