@@ -222,6 +222,14 @@ mod tests {
         assert_eq!(clamp_refresh_minutes(7.6), 8);
         assert_eq!(clamp_refresh_minutes(f64::NAN), DEFAULT_REFRESH_MINUTES);
         assert_eq!(clamp_refresh_minutes(f64::INFINITY), DEFAULT_REFRESH_MINUTES);
+        assert_eq!(clamp_refresh_minutes(f64::NEG_INFINITY), DEFAULT_REFRESH_MINUTES);
+        assert_eq!(clamp_refresh_minutes(MIN_REFRESH_MINUTES as f64), MIN_REFRESH_MINUTES);
+        assert_eq!(clamp_refresh_minutes(MAX_REFRESH_MINUTES as f64), MAX_REFRESH_MINUTES);
+        assert_eq!(clamp_refresh_minutes(DEFAULT_REFRESH_MINUTES as f64), DEFAULT_REFRESH_MINUTES);
+        assert_eq!(clamp_refresh_minutes((MIN_REFRESH_MINUTES - 1) as f64), MIN_REFRESH_MINUTES);
+        assert_eq!(clamp_refresh_minutes((MAX_REFRESH_MINUTES + 1) as f64), MAX_REFRESH_MINUTES);
+        assert_eq!(clamp_refresh_minutes(1.4), 1);
+        assert_eq!(clamp_refresh_minutes(1.5), 2);
     }
 
     #[test]
