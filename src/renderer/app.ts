@@ -37,6 +37,19 @@ let lastNonSettingsHeight = WIDGET_HEIGHT_COLLAPSED
 // an enterprise and a team org; the primary org uses the main section above)
 let extraOrgs: Array<{ org: OrganizationInfo; data: UsageData }> = []
 
+// Shared utility to group history by hour for cleaner chart display
+function groupHistoryByHour(recentHistory: UsageHistoryEntry[]): Record<string, UsageHistoryEntry> {
+  const hourlyData: Record<string, UsageHistoryEntry> = {}
+  for (const entry of recentHistory) {
+    const date = new Date(entry.timestamp)
+    const hourKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`
+    if (!hourlyData[hourKey] || entry.timestamp > hourlyData[hourKey].timestamp) {
+      hourlyData[hourKey] = entry
+    }
+  }
+  return hourlyData
+}
+
 // Codex state
 let codexHasData = false
 let latestCodexData: CodexUsageData | null = null
@@ -1634,14 +1647,7 @@ async function renderUsageChart(): Promise<void> {
     const recent = history.filter((e) => e.timestamp >= sevenDaysAgo)
 
     // Group by hour for cleaner display
-    const hourlyData: Record<string, UsageHistoryEntry> = {}
-    for (const entry of recent) {
-      const date = new Date(entry.timestamp)
-      const hourKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`
-      if (!hourlyData[hourKey] || entry.timestamp > hourlyData[hourKey].timestamp) {
-        hourlyData[hourKey] = entry
-      }
-    }
+    const hourlyData = groupHistoryByHour(recent)
 
     const sortedKeys = Object.keys(hourlyData).sort()
     const len = sortedKeys.length
@@ -1651,20 +1657,25 @@ async function renderUsageChart(): Promise<void> {
     const sonnetData = new Array(len)
     const opusData = new Array(len)
     const coworkData = new Array(len)
+
     let hasOpus = false
     let hasCowork = false
+
     for (let i = 0; i < len; i++) {
       const k = sortedKeys[i]
-      const data = hourlyData[k]
       const parts = k.split(' ')
       const dateParts = parts[0].split('-')
       labels[i] = `${dateParts[1]}/${dateParts[2]} ${parts[1]}`
+
+      const data = hourlyData[k]
       sessionData[i] = data.session
       weeklyData[i] = data.weekly
       sonnetData[i] = data.sonnet || 0
+
       const opus = data.opus || 0
       opusData[i] = opus
       if (opus > 0) hasOpus = true
+
       const cowork = data.cowork || 0
       coworkData[i] = cowork
       if (cowork > 0) hasCowork = true
@@ -1978,14 +1989,7 @@ async function renderCodexUsageChart(): Promise<void> {
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
     const recent = history.filter((e) => e.timestamp >= sevenDaysAgo && (e.codexSession != null || e.codexWeekly != null))
 
-    const hourlyData: Record<string, UsageHistoryEntry> = {}
-    for (const entry of recent) {
-      const date = new Date(entry.timestamp)
-      const hourKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`
-      if (!hourlyData[hourKey] || entry.timestamp > hourlyData[hourKey].timestamp) {
-        hourlyData[hourKey] = entry
-      }
-    }
+    const hourlyData = groupHistoryByHour(recent)
 
     const sortedKeys = Object.keys(hourlyData).sort()
     const len = sortedKeys.length
