@@ -33,13 +33,7 @@ fn get_from_keyring(app: &AppHandle, key: &str) -> Option<String> {
         return None;
     }
     
-    let entry = match Entry::new(KEYRING_SERVICE, &format!("{}-{}", app.config().identifier, key)) {
-        Ok(e) => e,
-        Err(e) => {
-            eprintln!("Failed to create keyring entry for {}: {}", key, e);
-            return None;
-        }
-    };
+    let entry = Entry::new(KEYRING_SERVICE, &format!("{}-{}", app.config().identifier, key));
     
     match entry.get_password() {
         Ok(password) => Some(password),
@@ -57,13 +51,7 @@ fn set_in_keyring(app: &AppHandle, key: &str, value: &str) {
         return;
     }
     
-    let entry = match Entry::new(KEYRING_SERVICE, &format!("{}-{}", app.config().identifier, key)) {
-        Ok(e) => e,
-        Err(e) => {
-            eprintln!("Failed to create keyring entry for {}: {}", key, e);
-            return;
-        }
-    };
+    let entry = Entry::new(KEYRING_SERVICE, &format!("{}-{}", app.config().identifier, key));
     
     if let Err(e) = entry.set_password(value) {
         eprintln!("Failed to set keyring password for {}: {}", key, e);
@@ -76,15 +64,9 @@ fn delete_from_keyring(app: &AppHandle, key: &str) {
         return;
     }
     
-    let entry = match Entry::new(KEYRING_SERVICE, &format!("{}-{}", app.config().identifier, key)) {
-        Ok(e) => e,
-        Err(e) => {
-            eprintln!("Failed to create keyring entry for {}: {}", key, e);
-            return;
-        }
-    };
+    let entry = Entry::new(KEYRING_SERVICE, &format!("{}-{}", app.config().identifier, key));
     
-    if let Err(e) = entry.delete_credential() {
+    if let Err(e) = entry.delete_password() {
         // Ignore "no entry" errors
         if !matches!(e, keyring::Error::NoEntry) {
             eprintln!("Failed to delete keyring credential for {}: {}", key, e);
@@ -151,7 +133,7 @@ pub fn sanitize_for_debug(value: &Value) -> Value {
     let mut sanitized = value.clone();
     if let Some(obj) = sanitized.as_object_mut() {
         for key in KEYRING_KEYS {
-            if obj.contains_key(key) {
+            if obj.contains_key(*key) {
                 obj.insert(key.to_string(), serde_json::json!("[REDACTED]"));
             }
         }
@@ -183,4 +165,24 @@ macro_rules! debug_log {
             }
         }
     };
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_keyring_key() {
+        // Should return true for keys in KEYRING_KEYS
+        assert!(is_keyring_key("sessionKey"));
+        assert!(is_keyring_key("organizationId"));
+        assert!(is_keyring_key("codexAccessToken"));
+        assert!(is_keyring_key("codexCookieName"));
+
+        // Should return false for arbitrary or similar keys
+        assert!(!is_keyring_key(""));
+        assert!(!is_keyring_key("randomKey"));
+        assert!(!is_keyring_key("sessionkey")); // case sensitive
+        assert!(!is_keyring_key("sessionKey2"));
+        assert!(!is_keyring_key("otherKey"));
+    }
 }
