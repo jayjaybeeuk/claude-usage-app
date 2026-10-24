@@ -2005,13 +2005,19 @@ async function renderCodexUsageChart(): Promise<void> {
     const hourlyData = groupHistoryByHour(recent)
 
     const sortedKeys = Object.keys(hourlyData).sort()
-    const sessionData = sortedKeys.map((k) => hourlyData[k].codexSession ?? 0)
-    const weeklyData = sortedKeys.map((k) => hourlyData[k].codexWeekly ?? 0)
-    const labels = sortedKeys.map((k) => {
+    const len = sortedKeys.length
+    const sessionData = new Array(len)
+    const weeklyData = new Array(len)
+    const labels = new Array(len)
+    for (let i = 0; i < len; i++) {
+      const k = sortedKeys[i]
+      const data = hourlyData[k]
+      sessionData[i] = data.codexSession ?? 0
+      weeklyData[i] = data.codexWeekly ?? 0
       const parts = k.split(' ')
       const dateParts = parts[0].split('-')
-      return `${dateParts[1]}/${dateParts[2]} ${parts[1]}`
-    })
+      labels[i] = `${dateParts[1]}/${dateParts[2]} ${parts[1]}`
+    }
 
     const canvas = elements.codexUsageChart
     const dpr = window.devicePixelRatio || 1
