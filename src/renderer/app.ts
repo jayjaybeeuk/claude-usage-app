@@ -1644,18 +1644,31 @@ async function renderUsageChart(): Promise<void> {
     }
 
     const sortedKeys = Object.keys(hourlyData).sort()
-    const labels = sortedKeys.map((k) => {
+    const len = sortedKeys.length
+    const labels = new Array(len)
+    const sessionData = new Array(len)
+    const weeklyData = new Array(len)
+    const sonnetData = new Array(len)
+    const opusData = new Array(len)
+    const coworkData = new Array(len)
+    let hasOpus = false
+    let hasCowork = false
+    for (let i = 0; i < len; i++) {
+      const k = sortedKeys[i]
+      const data = hourlyData[k]
       const parts = k.split(' ')
       const dateParts = parts[0].split('-')
-      return `${dateParts[1]}/${dateParts[2]} ${parts[1]}`
-    })
-    const sessionData = sortedKeys.map((k) => hourlyData[k].session)
-    const weeklyData = sortedKeys.map((k) => hourlyData[k].weekly)
-    const sonnetData = sortedKeys.map((k) => hourlyData[k].sonnet || 0)
-    const opusData = sortedKeys.map((k) => hourlyData[k].opus || 0)
-    const coworkData = sortedKeys.map((k) => hourlyData[k].cowork || 0)
-    const hasOpus = opusData.some((v) => v > 0)
-    const hasCowork = coworkData.some((v) => v > 0)
+      labels[i] = `${dateParts[1]}/${dateParts[2]} ${parts[1]}`
+      sessionData[i] = data.session
+      weeklyData[i] = data.weekly
+      sonnetData[i] = data.sonnet || 0
+      const opus = data.opus || 0
+      opusData[i] = opus
+      if (opus > 0) hasOpus = true
+      const cowork = data.cowork || 0
+      coworkData[i] = cowork
+      if (cowork > 0) hasCowork = true
+    }
 
     const canvas = elements.usageChart
     const dpr = window.devicePixelRatio || 1
@@ -1975,13 +1988,19 @@ async function renderCodexUsageChart(): Promise<void> {
     }
 
     const sortedKeys = Object.keys(hourlyData).sort()
-    const sessionData = sortedKeys.map((k) => hourlyData[k].codexSession ?? 0)
-    const weeklyData = sortedKeys.map((k) => hourlyData[k].codexWeekly ?? 0)
-    const labels = sortedKeys.map((k) => {
+    const len = sortedKeys.length
+    const sessionData = new Array(len)
+    const weeklyData = new Array(len)
+    const labels = new Array(len)
+    for (let i = 0; i < len; i++) {
+      const k = sortedKeys[i]
+      const data = hourlyData[k]
+      sessionData[i] = data.codexSession ?? 0
+      weeklyData[i] = data.codexWeekly ?? 0
       const parts = k.split(' ')
       const dateParts = parts[0].split('-')
-      return `${dateParts[1]}/${dateParts[2]} ${parts[1]}`
-    })
+      labels[i] = `${dateParts[1]}/${dateParts[2]} ${parts[1]}`
+    }
 
     const canvas = elements.codexUsageChart
     const dpr = window.devicePixelRatio || 1
