@@ -3,6 +3,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
 
 use serde::Deserialize;
+use tauri::async_runtime::JoinHandle;
 use tokio::sync::oneshot;
 
 /// Usage stats pushed from the renderer for tray display.
@@ -38,4 +39,8 @@ pub struct AppState {
     /// running inside the hidden window resolves these via `report_fetch_result`.
     pub fetch_pending: Mutex<HashMap<String, oneshot::Sender<String>>>,
     pub fetch_counter: AtomicU64,
+    /// Pending window position to be saved to settings.json after debounce delay.
+    pub pending_window_position: Mutex<Option<(f64, f64)>>,
+    /// Active debounce timer task for window position persistence.
+    pub window_position_debounce: Mutex<Option<JoinHandle<()>>>,
 }
