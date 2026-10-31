@@ -7,7 +7,6 @@ use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
 use keyring::Entry;
-use zeroize::{Zeroize, ZeroizeOnDrop};
 
 pub const STORE_FILE: &str = "settings.json";
 
