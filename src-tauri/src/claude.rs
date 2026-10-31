@@ -109,6 +109,7 @@ pub fn clear_webview_session(app: &AppHandle) {
             debug_log!("clear_all_browsing_data failed: {e}");
         }
     }
+    crate::fetch_via_window::destroy_worker_window(app);
 }
 
 #[tauri::command]
@@ -420,6 +421,7 @@ pub async fn fetch_usage_data(app: AppHandle) -> Result<Value, String> {
             if is_blocked {
                 settings::delete(&app, "sessionKey");
                 settings::delete(&app, "organizationId");
+                clear_webview_session(&app);
                 let _ = app.emit("session-expired", ());
                 return Err("SessionExpired".into());
             }
