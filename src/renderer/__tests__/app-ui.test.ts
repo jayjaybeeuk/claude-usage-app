@@ -157,6 +157,6 @@ describe('widget UI interactions', () => {
     await flush(10)
     const urls = (b.callsFor('open_external') as Array<{ url: string }>).map((c) => c.url)
     expect(urls).toHaveLength(2)
-    expect(urls[0]).toContain('paypal.me')
+    expect(urls[0]).toContain('github.com/sponsors')
   })
 })
