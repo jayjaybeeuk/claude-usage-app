@@ -5,6 +5,7 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, Wry};
 
 use crate::claude;
+use crate::commands;
 use crate::settings;
 use crate::state::{AppState, TrayStats};
 
@@ -123,6 +124,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
             update_tray(app);
         }
         "exit" => {
+            commands::flush_window_position(app);
             app.exit(0);
         }
         _ => {}

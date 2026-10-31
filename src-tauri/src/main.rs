@@ -9,7 +9,6 @@ mod settings;
 mod state;
 mod tray;
 
-use serde_json::json;
 use tauri::{LogicalPosition, Manager, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
 
@@ -141,15 +140,19 @@ fn main() {
                 // Hide to tray instead of quitting (tray Exit calls app.exit).
                 WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
+                    commands::flush_window_position(window.app_handle());
                     let _ = window.hide();
+                }
+                WindowEvent::Destroyed => {
+                    commands::flush_window_position(window.app_handle());
                 }
                 WindowEvent::Moved(position) => {
                     let scale = window.scale_factor().unwrap_or(1.0);
                     let logical = position.to_logical::<f64>(scale);
-                    settings::set(
+                    commands::debounce_save_window_position(
                         window.app_handle(),
-                        "windowPosition",
-                        json!({ "x": logical.x, "y": logical.y }),
+                        logical.x,
+                        logical.y,
                     );
                 }
                 _ => {}

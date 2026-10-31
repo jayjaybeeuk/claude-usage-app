@@ -10,6 +10,7 @@ use crate::debug_log;
 use crate::settings;
 
 pub const WIDGET_WIDTH: f64 = 480.0;
+pub const WINDOW_POSITION_DEBOUNCE_MS: u64 = 500;
 
 // Keep in sync with src/shared/refresh-interval.ts (used by the renderer).
 const MIN_REFRESH_MINUTES: i64 = 1;
@@ -28,8 +29,40 @@ fn clamp_refresh_minutes(value: f64) -> i64 {
 
 // ─── Window controls ─────────────────────────────────────────────────────────
 
+/// Debounce writing window position to disk so rapid Move events during window
+/// dragging do not cause synchronous disk I/O thrashing.
+pub fn debounce_save_window_position(app: &AppHandle, x: f64, y: f64) {
+    let state = app.state::<crate::state::AppState>();
+    *state.pending_window_position.lock().unwrap() = Some((x, y));
+
+    let mut debounce_guard = state.window_position_debounce.lock().unwrap();
+    if let Some(prev) = debounce_guard.take() {
+        prev.abort();
+    }
+
+    let handle = app.clone();
+    *debounce_guard = Some(tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(WINDOW_POSITION_DEBOUNCE_MS)).await;
+        flush_window_position(&handle);
+    }));
+}
+
+/// Immediately flush any pending debounced window position to settings.json.
+/// Called when the window is hidden, closed, or when the app is exiting.
+pub fn flush_window_position(app: &AppHandle) {
+    let state = app.state::<crate::state::AppState>();
+    if let Some(task) = state.window_position_debounce.lock().unwrap().take() {
+        task.abort();
+    }
+    let pos = state.pending_window_position.lock().unwrap().take();
+    if let Some((x, y)) = pos {
+        settings::set(app, "windowPosition", json!({ "x": x, "y": y }));
+    }
+}
+
 #[tauri::command]
 pub fn minimize_window(app: AppHandle) {
+    flush_window_position(&app);
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.hide();
     }
@@ -38,6 +71,7 @@ pub fn minimize_window(app: AppHandle) {
 #[tauri::command]
 pub fn close_window(app: AppHandle) {
     // Hide to tray on all platforms (X button = minimize to tray).
+    flush_window_position(&app);
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.hide();
     }
@@ -246,6 +280,20 @@ mod tests {
         assert!(is_auto_start_supported());
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         assert!(!is_auto_start_supported());
+    }
+
+    #[test]
+    fn app_state_pending_window_position_updates() {
+        let state = crate::state::AppState::default();
+        assert!(state.pending_window_position.lock().unwrap().is_none());
+        assert!(state.window_position_debounce.lock().unwrap().is_none());
+
+        *state.pending_window_position.lock().unwrap() = Some((120.0, 240.0));
+        assert_eq!(*state.pending_window_position.lock().unwrap(), Some((120.0, 240.0)));
+
+        let taken = state.pending_window_position.lock().unwrap().take();
+        assert_eq!(taken, Some((120.0, 240.0)));
+        assert!(state.pending_window_position.lock().unwrap().is_none());
     }
 }
 
